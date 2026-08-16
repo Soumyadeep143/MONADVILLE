@@ -26,7 +26,7 @@ npm run simulate                     # headless: 20 agents x 30 days, prints prd
 npm test                             # vitest units (tax math, loan limits, gini, business failure)
 ```
 
-Set `ANTHROPIC_API_KEY` to have agents use Claude for decisions; without it (or on any LLM failure), agents run on a deterministic personality-weighted fallback policy — the simulation always runs.
+Set `GROQ_API_KEY` to have agents use Groq for decisions; without it (or on any LLM failure), agents run on a deterministic personality-weighted fallback policy — the simulation always runs. Agent decisions within a cycle are fanned out concurrently (`DECISION_CONCURRENCY`, default 8) since the LLM round trip — not local computation — is what dominates a cycle's wall-clock time; only the state-mutating execution step is serialized.
 
 ## Layout
 

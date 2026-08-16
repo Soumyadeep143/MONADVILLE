@@ -1,4 +1,15 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+// Load the monorepo-root .env explicitly — npm workspace scripts run with
+// cwd set to the workspace package (apps/server), so dotenv's default
+// "load .env from process.cwd()" would silently miss the root .env that
+// .env.example documents. This resolves relative to this file instead, so
+// it works the same whether invoked via `npm run dev:server`, the
+// headless `simulate` script, or a plain `node dist/index.js`.
+const here = dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: resolve(here, "../../../../.env") });
 
 function pick<T extends string>(value: string | undefined, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(value ?? "") ? (value as T) : fallback;
@@ -19,8 +30,14 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
 
-  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-  CLAUDE_MODEL: process.env.CLAUDE_MODEL ?? "claude-haiku-4-5-20251001",
+  GROQ_API_KEY: process.env.GROQ_API_KEY,
+  GROQ_MODEL: process.env.GROQ_MODEL ?? "llama-3.1-8b-instant",
+  // Concurrent in-flight agent decision calls per cycle — Groq is fast enough
+  // that latency is dominated by round trips, not tokens/sec, so batching
+  // many agents' decisions concurrently is the actual lever. Kept modest by
+  // default to stay under free-tier rate limits; raise it if your Groq tier
+  // allows more.
+  DECISION_CONCURRENCY: Number(process.env.DECISION_CONCURRENCY ?? 8),
 
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:5173",
 };

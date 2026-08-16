@@ -1,11 +1,11 @@
-import type { Agent, SelectedAction } from "@econforge/shared";
+import type { Agent, CandidateAction, SelectedAction } from "@econforge/shared";
+import { PROMPT_VERSION } from "@econforge/shared";
 import type { EconomyContext } from "../economy/context.js";
 import { ActionError } from "../economy/errors.js";
 import * as economy from "../economy/index.js";
 import { generateCandidateActions } from "./candidates.js";
 import { decideAction } from "./decisionEngine.js";
 import { appendMemory } from "./memory.js";
-import { PROMPT_VERSION } from "@econforge/shared";
 
 async function execute(ctx: EconomyContext, agent: Agent, action: SelectedAction, simulationId: string, gameDay: number): Promise<string> {
   switch (action.action) {
@@ -75,29 +75,57 @@ async function execute(ctx: EconomyContext, agent: Agent, action: SelectedAction
   }
 }
 
+export interface PreparedDecision {
+  agentId: string;
+  candidates: CandidateAction[];
+  selected: SelectedAction;
+  source: "LLM" | "FALLBACK";
+  model: string | null;
+}
+
 /**
- * One full decide -> execute -> complete cycle for one agent: recalculate
- * state -> generate the deterministic candidate list -> personality-weighted
- * LLM/fallback pick -> validate -> execute -> persist decision record +
- * memory. The caller (DayProcessor) runs several of these per agent per
- * simulated day, each one fully resolving before the agent's next cycle
- * starts — an agent never has two decisions in flight. Invalid actions never
- * mutate state; they're recorded as rejected instead.
+ * Read-only half of a decision cycle: recalculate state -> generate the
+ * deterministic candidate list -> personality-weighted LLM/fallback pick.
+ * No state mutation happens here, which is exactly what makes it safe to
+ * run for many agents concurrently (see DayProcessor.ts) — the LLM round
+ * trip, not local computation, is what dominates a cycle's wall-clock time,
+ * so fanning these out is the actual throughput win.
  */
-export async function runAgentDecision(
+export async function prepareAgentDecision(
   ctx: EconomyContext,
   agent: Agent,
   simulationId: string,
   gameDay: number,
   seed: number,
   marketSummary: string,
-): Promise<void> {
+): Promise<PreparedDecision> {
   const candidates = await generateCandidateActions(ctx, agent, simulationId, gameDay);
   const { selected, source, model } = await decideAction(agent, candidates, marketSummary, seed, gameDay);
+  return { agentId: agent.id, candidates, selected, source, model };
+}
+
+/**
+ * Mutating half of a decision cycle: validate -> execute -> persist decision
+ * record + memory. Callers must run these sequentially (never concurrently
+ * for the same agent, and never interleaved with another agent's execution
+ * on the same shared resources) — the in-memory/Mongo store isn't
+ * transactional across documents. Re-fetches the agent fresh immediately
+ * before executing: since prepare() for a whole cycle's batch runs before
+ * any of that batch's executions, a candidate chosen earlier in the batch
+ * can go stale by the time its turn to execute comes up (e.g. a targeted
+ * farm's food sold out to an earlier agent this same cycle) — execute()
+ * re-validates for real and simply records the action as rejected if so,
+ * per prd.md §23 ("invalid actions cannot modify state"); the simulation
+ * continues either way.
+ */
+export async function applyAgentDecision(ctx: EconomyContext, prepared: PreparedDecision, simulationId: string, gameDay: number): Promise<void> {
+  const { agentId, candidates, selected, source, model } = prepared;
+  const fresh = await ctx.repos.agents.findById(agentId);
+  if (!fresh) return;
 
   let summary: string;
   try {
-    summary = await execute(ctx, agent, selected, simulationId, gameDay);
+    summary = await execute(ctx, fresh, selected, simulationId, gameDay);
   } catch (err) {
     const reason = err instanceof ActionError ? `${err.code}: ${err.message}` : "Unknown execution error";
     summary = `Attempted ${selected.action} but it was rejected (${reason}).`;
@@ -105,7 +133,7 @@ export async function runAgentDecision(
 
   await ctx.repos.decisions.create({
     simulationId,
-    agentId: agent.id,
+    agentId,
     gameDay,
     availableActions: candidates.map((c) => c.action),
     selectedAction: selected,
@@ -114,8 +142,14 @@ export async function runAgentDecision(
     promptVersion: PROMPT_VERSION,
   });
 
-  const fresh = await ctx.repos.agents.findById(agent.id);
-  if (fresh) {
-    await ctx.repos.agents.update(agent.id, { memory: appendMemory(fresh, gameDay, summary) });
+  const afterExecution = await ctx.repos.agents.findById(agentId);
+  if (afterExecution) {
+    await ctx.repos.agents.update(agentId, { memory: appendMemory(afterExecution, gameDay, summary) });
   }
+}
+
+/** Convenience wrapper for callers that just want one full cycle for one agent, sequentially. */
+export async function runAgentDecision(ctx: EconomyContext, agent: Agent, simulationId: string, gameDay: number, seed: number, marketSummary: string): Promise<void> {
+  const prepared = await prepareAgentDecision(ctx, agent, simulationId, gameDay, seed, marketSummary);
+  await applyAgentDecision(ctx, prepared, simulationId, gameDay);
 }

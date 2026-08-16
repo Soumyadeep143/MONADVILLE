@@ -28,7 +28,7 @@ async function main() {
   const simulation0 = await SimulationEngine.createSimulation(ctx, { name: "Headless smoke test", durationDays: DURATION_DAYS, participants });
   await SimulationEngine.startSimulation(ctx, simulation0.id);
 
-  console.log(`Simulation ${simulation0.id}: ${AGENT_COUNT} agents, ${DURATION_DAYS} days, seed ${simulation0.randomSeed}, LLM ${process.env.ANTHROPIC_API_KEY ? "enabled" : "disabled (fallback policy only)"}`);
+  console.log(`Simulation ${simulation0.id}: ${AGENT_COUNT} agents, ${DURATION_DAYS} days, seed ${simulation0.randomSeed}, Groq ${process.env.GROQ_API_KEY ? "enabled" : "disabled (fallback policy only)"}`);
 
   const started = Date.now();
   const final = await SimulationEngine.runToCompletion(ctx, simulation0.id);

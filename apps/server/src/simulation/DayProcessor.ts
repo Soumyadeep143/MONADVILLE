@@ -2,8 +2,10 @@ import type { Simulation } from "@econforge/shared";
 import { DECISION_CYCLES_PER_DAY } from "@econforge/shared";
 import type { EconomyContext } from "../economy/context.js";
 import * as economy from "../economy/index.js";
-import { runAgentDecision } from "../agents/runner.js";
+import { prepareAgentDecision, applyAgentDecision } from "../agents/runner.js";
 import { computeMetrics } from "../analytics/index.js";
+import { mapWithConcurrency } from "./concurrency.js";
+import { env } from "../config/env.js";
 
 function buildMarketSummary(businessCounts: Record<string, number>, treasuryBalance: number, shockMessage: string): string {
   const parts = [
@@ -46,17 +48,27 @@ export async function processDay(ctx: EconomyContext, simulation: Simulation): P
   // throttle. Each agent runs DECISION_CYCLES_PER_DAY full decide->execute->
   // complete cycles this tick, round-robin across agents (all agents' cycle
   // 1, then all agents' cycle 2, ...) rather than one agent exhausting all
-  // its cycles before the next agent gets a turn. Within a single agent,
-  // cycles are strictly sequential — the previous cycle is always fully
-  // recorded before the next one's candidates are generated, so an agent
-  // never has two decisions in flight. Fixed agent order keeps a given
-  // seed+day reproducible (flow.md §15 replay).
+  // its cycles before the next agent gets a turn.
+  //
+  // Within one cycle, the "decide" half (candidate generation + LLM/fallback
+  // pick) is read-only, so it's fanned out across agents with bounded
+  // concurrency — that round trip is what actually dominates a cycle's
+  // wall-clock time, not local computation, and Groq is fast enough that
+  // batching many of these at once is the real throughput lever. The
+  // "execute" half mutates shared state (business inventory, treasury, ...)
+  // and always runs strictly sequentially in a fixed order afterward, so an
+  // agent never has two decisions in flight and a given seed+day stays
+  // reproducible (flow.md §15 replay) regardless of network timing.
   const agentIds = (await ctx.repos.agents.findBySimulation(simulationId)).map((a) => a.id).sort((a, b) => a.localeCompare(b));
   for (let cycle = 0; cycle < DECISION_CYCLES_PER_DAY; cycle++) {
-    for (const agentId of agentIds) {
-      const fresh = await ctx.repos.agents.findById(agentId);
-      if (!fresh) continue;
-      await runAgentDecision(ctx, fresh, simulationId, gameDay, simulation.randomSeed, marketSummary);
+    const agents = (await Promise.all(agentIds.map((id) => ctx.repos.agents.findById(id)))).filter((a): a is NonNullable<typeof a> => a !== null);
+
+    const prepared = await mapWithConcurrency(agents, env.DECISION_CONCURRENCY, (agent) =>
+      prepareAgentDecision(ctx, agent, simulationId, gameDay, simulation.randomSeed, marketSummary),
+    );
+
+    for (const decision of prepared) {
+      await applyAgentDecision(ctx, decision, simulationId, gameDay);
     }
   }
 
