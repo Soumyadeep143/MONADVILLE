@@ -19,7 +19,7 @@ export const env = {
   PORT: Number(process.env.PORT ?? 4000),
   NODE_ENV: process.env.NODE_ENV ?? "development",
 
-  PERSISTENCE_DRIVER: pick(process.env.PERSISTENCE_DRIVER, ["memory", "mongo"] as const, "memory"),
+  PERSISTENCE_DRIVER: pick(process.env.PERSISTENCE_DRIVER, ["memory", "mongo", "supabase"] as const, "memory"),
   MONGODB_URI: process.env.MONGODB_URI,
 
   LEDGER_DRIVER: pick(process.env.LEDGER_DRIVER, ["memory", "monad"] as const, "memory"),
@@ -29,6 +29,9 @@ export const env = {
   AUTH_DRIVER: pick(process.env.AUTH_DRIVER, ["dev", "supabase"] as const, "dev"),
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+  // Server-side only — bypasses RLS. Required when PERSISTENCE_DRIVER=supabase.
+  // Get it from Supabase Dashboard > Project Settings > API > service_role secret.
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
 
   GROQ_API_KEY: process.env.GROQ_API_KEY,
   GROQ_MODEL: process.env.GROQ_MODEL ?? "llama-3.1-8b-instant",

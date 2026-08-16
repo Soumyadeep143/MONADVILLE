@@ -23,10 +23,17 @@ npm run dev:server                   # API on :4000
 npm run dev:web                      # dashboard on :5173
 
 npm run simulate                     # headless: 20 agents x 30 days, prints prd.md §23 acceptance checks
+npm run experiment                   # 10-scenario controlled-experiment battery (prd.md §22), prints a comparison table
 npm test                             # vitest units (tax math, loan limits, gini, business failure)
 ```
 
-Set `GROQ_API_KEY` to have agents use Groq for decisions; without it (or on any LLM failure), agents run on a deterministic personality-weighted fallback policy — the simulation always runs. Agent decisions within a cycle are fanned out concurrently (`DECISION_CONCURRENCY`, default 8) since the LLM round trip — not local computation — is what dominates a cycle's wall-clock time; only the state-mutating execution step is serialized. A full 20-agent/30-day run against real Groq is on the order of 15–20 minutes at the default concurrency (~1800 decision calls) — fine for the background scheduler, but don't expect the headless script to finish quickly with a key set; unset `GROQ_API_KEY` for a fast fallback-only run when you just want to check the economics.
+Set `GROQ_API_KEY` to have agents use Groq for decisions; without it (or on any LLM failure), agents run on a deterministic personality-weighted fallback policy — the simulation always runs. Agent decisions within a cycle are fanned out concurrently (`DECISION_CONCURRENCY`, default 4) since the LLM round trip — not local computation — is what dominates a cycle's wall-clock time; only the state-mutating execution step is serialized. A full 20-agent/30-day run against real Groq is on the order of 15–20 minutes at the default concurrency (~1800 decision calls) — fine for the background scheduler, but don't expect the headless script to finish quickly with a key set; unset `GROQ_API_KEY` for a fast fallback-only run when you just want to check the economics.
+
+### Decision policies & experiments (prd.md §22 / roadmap.md Phase 9)
+
+Every simulation picks a `decisionPolicy` at creation (dashboard dropdown, or the API's `decisionPolicy` field): `LLM` (Groq, falls back to `PERSONALITY` on any failure — the default), `PERSONALITY` (the same deterministic personality-weighted policy, but never touches the LLM), `RANDOM` (uniform pick among valid actions), or `RATIONAL` (a fixed, personality-blind utility ranking). Only `LLM` is non-deterministic run-to-run; the other three give identical results for the same seed, which is what makes them useful as baselines to compare personality-driven behavior against.
+
+Simulations also accept a `rulesOverride` (tax rate, wage, loan terms, worker requirement) and a pinned `seed`, so `npm run experiment` can hold a population and rules constant while varying just the policy, or hold the policy constant while varying the rules — see `scripts/run-experiment.ts` for the scenario battery and `apps/server/src/simulation/populations.ts` for the seeded population generators (homogeneous / heterogeneous / trait-skewed).
 
 **Gotcha:** `apps/server` resolves `@econforge/shared` through its **compiled** `dist/`, not live source — if you edit anything under `packages/shared/src` while `npm run dev:server` is running, rebuild it (`npm run build -w packages/shared`) or the dev server will crash-loop on the stale export until you do.
 
