@@ -1,7 +1,8 @@
 // Supabase/Postgres implementation of the Repositories seam (../repositories).
 // Table shapes come from the `init_econforge_schema` migration applied via
 // the Supabase MCP server — see docs/database.md §3-11 for the field-level
-// origin (this replaces the never-implemented Mongo driver in ../mongo/).
+// origin. `../mongo/` implements the same interfaces against MongoDB
+// instead — either is selectable via PERSISTENCE_DRIVER.
 //
 // Every table uses a `bigint identity` primary key; the Repositories contract
 // exposes ids as `string`, so every id crossing the boundary is converted
@@ -12,6 +13,17 @@
 //
 // `updated_at` columns are maintained by a DB trigger (see migration), so
 // update() methods never set it themselves.
+//
+// Every listing query below orders explicitly (by `id`, or `created_at`
+// with `id` as a tie-break) even where the interface doesn't require an
+// order. PostgREST/Postgres make no row-order guarantee without an explicit
+// ORDER BY, but the in-memory driver's Map-backed Collection always returns
+// insertion order "for free" — and economy code implicitly relies on that
+// stable order for tie-breaking (e.g. Bertrand pricing's "cheapest
+// competitor, first in list wins a tie"). Leaving these unordered caused
+// real, reproducible divergence between two runs of the same seed against
+// the Mongo driver (caught via flow.md §15 replay, not by the in-memory-only
+// unit tests) — same root cause applies here, fixed the same way.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
@@ -239,7 +251,7 @@ class SupabaseAgentRepository implements AgentRepository {
     return res.data ? rowToAgent(res.data as AgentRow) : null;
   }
   async findBySimulation(simulationId: string): Promise<Agent[]> {
-    const res = await this.db.from("agents").select().eq("simulation_id", toId(simulationId));
+    const res = await this.db.from("agents").select().eq("simulation_id", toId(simulationId)).order("id", { ascending: true });
     return unwrapList<AgentRow>(res).map(rowToAgent);
   }
   async findByUserAndSimulation(userId: string, simulationId: string): Promise<Agent | null> {
@@ -326,6 +338,7 @@ class SupabaseBusinessRepository implements BusinessRepository {
     if (filter?.type) q = q.eq("type", filter.type);
     if (filter?.ownerId) q = q.eq("owner_agent_id", toId(filter.ownerId));
     if (filter?.status) q = q.eq("status", filter.status);
+    q = q.order("id", { ascending: true });
     return unwrapList<BusinessRow>(await q).map(rowToBusiness);
   }
   async update(id: string, patch: Partial<Omit<Business, "id" | "createdAt">>): Promise<Business> {
@@ -389,11 +402,11 @@ class SupabasePropertyRepository implements PropertyRepository {
     return res.data ? rowToProperty(res.data as PropertyRow) : null;
   }
   async findBySimulation(simulationId: string): Promise<Property[]> {
-    const res = await this.db.from("properties").select().eq("simulation_id", toId(simulationId));
+    const res = await this.db.from("properties").select().eq("simulation_id", toId(simulationId)).order("id", { ascending: true });
     return unwrapList<PropertyRow>(res).map(rowToProperty);
   }
   async findByOwner(ownerAgentId: string): Promise<Property[]> {
-    const res = await this.db.from("properties").select().eq("owner_agent_id", toId(ownerAgentId));
+    const res = await this.db.from("properties").select().eq("owner_agent_id", toId(ownerAgentId)).order("id", { ascending: true });
     return unwrapList<PropertyRow>(res).map(rowToProperty);
   }
   async update(id: string, patch: Partial<Omit<Property, "id" | "createdAt">>): Promise<Property> {
@@ -471,7 +484,7 @@ class SupabaseTransactionRepository implements TransactionRepository {
     // Filters on the blockchain_status generated column (see migration) —
     // avoids a full jsonb scan for `blockchain.status`.
     if (filter?.status) q = q.eq("blockchain_status", filter.status);
-    q = q.order("created_at", { ascending: false });
+    q = q.order("created_at", { ascending: false }).order("id", { ascending: false });
     if (filter?.limit) q = q.limit(filter.limit);
     return unwrapList<TransactionRow>(await q).map(rowToTransaction);
   }
@@ -548,11 +561,11 @@ class SupabaseLoanRepository implements LoanRepository {
     return res.data ? rowToLoan(res.data as LoanRow) : null;
   }
   async findBySimulation(simulationId: string): Promise<Loan[]> {
-    const res = await this.db.from("loans").select().eq("simulation_id", toId(simulationId));
+    const res = await this.db.from("loans").select().eq("simulation_id", toId(simulationId)).order("id", { ascending: true });
     return unwrapList<LoanRow>(res).map(rowToLoan);
   }
   async findByAgent(agentId: string): Promise<Loan[]> {
-    const res = await this.db.from("loans").select().eq("agent_id", toId(agentId));
+    const res = await this.db.from("loans").select().eq("agent_id", toId(agentId)).order("id", { ascending: true });
     return unwrapList<LoanRow>(res).map(rowToLoan);
   }
   async update(id: string, patch: Partial<Omit<Loan, "id" | "createdAt">>): Promise<Loan> {
@@ -610,7 +623,7 @@ class SupabaseEventRepository implements EventRepository {
     let q = this.db.from("events").select().eq("simulation_id", toId(simulationId));
     if (filter?.day !== undefined) q = q.eq("game_day", filter.day);
     if (filter?.type) q = q.eq("type", filter.type);
-    q = q.order("created_at", { ascending: false });
+    q = q.order("created_at", { ascending: false }).order("id", { ascending: false });
     if (filter?.limit) q = q.limit(filter.limit);
     return unwrapList<EventRow>(await q).map(rowToEvent);
   }
@@ -671,6 +684,7 @@ class SupabaseAgentDecisionRepository implements AgentDecisionRepository {
     let q = this.db.from("agent_decisions").select().eq("simulation_id", toId(simulationId));
     if (filter?.agentId) q = q.eq("agent_id", toId(filter.agentId));
     if (filter?.day !== undefined) q = q.eq("game_day", filter.day);
+    q = q.order("id", { ascending: true });
     return unwrapList<AgentDecisionRow>(await q).map(rowToAgentDecision);
   }
 }

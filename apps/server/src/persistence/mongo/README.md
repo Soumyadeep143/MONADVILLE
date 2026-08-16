@@ -1,34 +1,32 @@
-# MongoDB persistence — implement this
+# MongoDB persistence
 
-This folder is the seam for the real MongoDB-backed persistence layer described
-in `docs/database.md`. Everything else in the app talks to `Repositories`
-(`apps/server/src/persistence/repositories/index.ts`) and doesn't know or
-care whether the implementation is in-memory or Mongo.
+`index.ts` implements the `Repositories` seam
+(`apps/server/src/persistence/repositories/index.ts`) against a real MongoDB
+cluster using the official `mongodb` driver — one collection per interface,
+matching `docs/database.md` §3–11: `users`, `agents`, `simulations`,
+`businesses`, `properties`, `transactions`, `loans`, `events`,
+`agent_decisions`. Nothing outside `persistence/` knows or cares that this
+isn't the in-memory driver — same pattern as `../supabase/`, which
+implements the identical interfaces against Postgres instead, if you'd
+rather run against that.
 
-## What to build
+Verified end-to-end (real cluster, not mocked): create a simulation, run it
+to completion, re-fetch every collection on a **fresh** connection to prove
+the writes actually persisted, recompute analytics — all round-tripped
+correctly.
 
-Implement each interface in `../repositories/index.ts` using the official
-`mongodb` driver (or `mongoose`, your call) against the collections and
-document shapes documented in `docs/database.md` §3–11:
+`PERSISTENCE_DRIVER=mongo` + `MONGODB_URI` in `.env` selects this driver
+(see `apps/server/src/persistence/index.ts`); `.env.example` still defaults
+to `memory` so a fresh clone runs with zero external services.
 
-- `users`, `agents`, `simulations`, `businesses`, `properties`,
-  `transactions`, `loans`, `events`, `agent_decisions`
-
-Export a single factory, matching the in-memory version's shape:
-
-```ts
-// mongo/index.ts
-import type { Repositories } from "../repositories/index.js";
-
-export async function createMongoRepositories(connectionUri: string): Promise<Repositories> {
-  // connect, build indexes per database.md §3-11, return the 9 repository impls
-}
-```
-
-Then wire it into `apps/server/src/persistence/index.ts` — flip
-`PERSISTENCE_DRIVER=mongo` and construct `createMongoRepositories(...)`
-there instead of the in-memory factory. Nothing else in the codebase should
-need to change.
+Mongo is schemaless, so — unlike the Supabase/Postgres driver — nested
+domain fields (`personality`, `economic`, `state`, `employees`,
+`blockchain`, `metrics`, ...) are stored as-is, no jsonb-style flattening.
+The only conversion at the boundary is the id: Mongo's `_id` (`ObjectId`)
+maps to/from the interfaces' `string` id; every other id-shaped field
+(`userId`, `simulationId`, `ownerAgentId`, ...) is stored as a plain string
+— the same hex string `_id.toHexString()` produces — so cross-collection
+lookups are ordinary string-equality queries, no casting.
 
 ## Notes from docs/database.md worth preserving
 
