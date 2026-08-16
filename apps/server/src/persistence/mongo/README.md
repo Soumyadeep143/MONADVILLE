@@ -43,3 +43,9 @@ need to change.
 - Never persist raw questionnaire answers or the personality vector on-chain
   (that's a blockchain-side concern, not yours, but keep it in mind if you
   ever mirror agent docs anywhere public).
+- `properties` gained one field beyond database.md §7: `forSale: boolean`
+  (default `false`). It backs the peer-to-peer property market
+  (`economy/property.ts`) — `SELL_PROPERTY` lists a property by setting this
+  true, and `BUY_PROPERTY` with a target id buys a listing directly from its
+  owner (taxed like any transfer). Index it alongside `simulationId` if you
+  want the "browse listings" query to be fast at scale.

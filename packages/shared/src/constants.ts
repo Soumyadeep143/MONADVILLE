@@ -28,6 +28,16 @@ export const FOOD_UNIT_PRICE = 5; // restaurant buying food from a farm, per uni
 export const DEFAULT_MEAL_PRICE = 10;
 export const DEFAULT_TICKET_PRICE = 15;
 
+// Daily price-adjustment step: undercut a cheaper competitor, or drift up
+// when you're the cheapest (or the only) seller — the mechanism prd.md §20
+// expects to "naturally create" Bertrand-style competition and monopoly
+// pricing power, rather than an agent-chosen SET_PRICE action.
+export const PRICE_ADJUSTMENT_STEP_BPS = 500; // 5%/day
+export const MONOPOLY_DRIFT_STEP_BPS = 250; // 2.5%/day — slower than competitive undercutting
+export const MIN_MEAL_PRICE = 4;
+export const MIN_TICKET_PRICE = 6;
+export const MAX_PRICE_MULTIPLIER = 3; // ceiling relative to the starting default price
+
 export const LOAN_MAX_PERCENT_BPS = 5000; // 50% of net worth
 export const LOAN_INTEREST_BPS = 1000; // 10%
 export const LOAN_DURATION_DAYS = 10;

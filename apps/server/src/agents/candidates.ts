@@ -42,7 +42,12 @@ export async function generateCandidateActions(
   }
 
   if (agent.state.hunger > 0) {
-    const restaurant = businesses.find((b) => b.type === "RESTAURANT" && b.status === "ACTIVE" && b.inventory.meals > 0);
+    // Cheapest first — this is what makes the Bertrand-competition pricing
+    // in economy/pricing.ts actually matter economically: undercutting only
+    // wins customers if shoppers are price-sensitive.
+    const restaurant = businesses
+      .filter((b) => b.type === "RESTAURANT" && b.status === "ACTIVE" && b.inventory.meals > 0)
+      .sort((a, b) => a.price - b.price)[0];
     if (restaurant) {
       push({
         action: "BUY_MEAL",
@@ -53,7 +58,7 @@ export async function generateCandidateActions(
     }
   }
 
-  const theatre = businesses.find((b) => b.type === "THEATRE" && b.status === "ACTIVE");
+  const theatre = businesses.filter((b) => b.type === "THEATRE" && b.status === "ACTIVE").sort((a, b) => a.price - b.price)[0];
   if (theatre && agent.economic.cash >= theatre.price) {
     push({
       action: "VISIT_THEATRE",
@@ -64,20 +69,33 @@ export async function generateCandidateActions(
   }
 
   if (agent.economic.cash >= LAND_VALUE) {
-    push({ action: "BUY_PROPERTY", targetId: null, amount: LAND_VALUE, description: `Buy a plot of land for ${LAND_VALUE} coins.` });
+    push({ action: "BUY_PROPERTY", targetId: null, amount: LAND_VALUE, description: `Buy unclaimed land for ${LAND_VALUE} coins.` });
   }
 
-  const sellableProperty = properties.find((p) => p.ownerAgentId === agent.id && !p.businessId);
+  // Peer market: buy someone else's listed property directly, cheapest first.
+  const listings = properties
+    .filter((p) => p.forSale && p.ownerAgentId !== agent.id && agent.economic.cash >= p.marketValue)
+    .sort((a, b) => a.marketValue - b.marketValue);
+  for (const listing of listings.slice(0, 2)) {
+    push({
+      action: "BUY_PROPERTY",
+      targetId: listing.id,
+      amount: listing.marketValue,
+      description: `Buy a ${listing.type.toLowerCase()} property listed by another agent for ${listing.marketValue} coins.`,
+    });
+  }
+
+  const sellableProperty = properties.find((p) => p.ownerAgentId === agent.id && !p.businessId && !p.forSale);
   if (sellableProperty) {
     push({
       action: "SELL_PROPERTY",
       targetId: sellableProperty.id,
       amount: sellableProperty.marketValue,
-      description: `Sell your land for ${sellableProperty.marketValue} coins.`,
+      description: `List your land for sale at ${sellableProperty.marketValue} coins.`,
     });
   }
 
-  const spareLand = properties.find((p) => p.ownerAgentId === agent.id && p.type === "LAND" && !p.businessId);
+  const spareLand = properties.find((p) => p.ownerAgentId === agent.id && p.type === "LAND" && !p.businessId && !p.forSale);
   const startCost = spareLand ? CONSTRUCTION_VALUE : BUSINESS_PROPERTY_COST;
   if (agent.economic.cash >= startCost) {
     for (const type of ["FARM", "RESTAURANT", "THEATRE"] as const) {

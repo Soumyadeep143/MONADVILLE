@@ -21,26 +21,30 @@ const SYSTEM_PROMPT =
 let client: Groq | null = null;
 function getClient(): Groq | null {
   if (!env.GROQ_API_KEY) return null;
-  if (!client) client = new Groq({ apiKey: env.GROQ_API_KEY });
+  if (!client) {
+    // maxRetries lets the SDK's built-in backoff ride out a momentary
+    // tokens-per-minute bucket contention (common on Groq's free tier when
+    // several agents' decisions land in the same instant); the 8s timeout
+    // still bounds the worst case so a stuck request can't stall a whole
+    // decision cycle — it just falls back for that one agent instead.
+    client = new Groq({ apiKey: env.GROQ_API_KEY, timeout: 8_000, maxRetries: 3 });
+  }
   return client;
 }
 
+// Kept deliberately terse — every token here counts against the account's
+// tokens-per-minute budget, and the free tier's default limit (6000 TPM on
+// llama-3.1-8b-instant) is tight enough that prompt size directly caps how
+// many agents can get a real LLM decision per minute before falling back.
 function buildPrompt(agent: Agent, candidates: CandidateAction[], marketSummary: string, day: number): string {
   return [
-    `Simulation tick ${day}. You are agent ${agent.id}.`,
-    ``,
-    `Behavioral tendencies (0-100, higher = stronger tendency):`,
-    `risk=${agent.personality.risk} spending=${agent.personality.spending} ethics=${agent.personality.ethics} confidence=${agent.personality.confidence} fomo=${agent.personality.fomo}`,
-    ``,
-    `Your state: cash=${agent.economic.cash} debt=${agent.economic.outstandingDebt} hunger=${agent.state.hunger} employment=${agent.state.employmentStatus}`,
-    ``,
+    `Tick ${day}. Agent ${agent.id}.`,
+    `Traits: risk=${agent.personality.risk} spending=${agent.personality.spending} ethics=${agent.personality.ethics} confidence=${agent.personality.confidence} fomo=${agent.personality.fomo}`,
+    `State: cash=${agent.economic.cash} debt=${agent.economic.outstandingDebt} hunger=${agent.state.hunger} employment=${agent.state.employmentStatus}`,
     `Market: ${marketSummary}`,
-    ``,
-    `Recent memory:`,
-    summarizeMemory(agent.memory),
-    ``,
-    `Here are the only actions currently valid for you. Pick exactly one by its id — you cannot choose anything not listed here:`,
-    ...candidates.map((c) => `- id=${c.id}: ${c.description} (action=${c.action})`),
+    `Memory: ${summarizeMemory(agent.memory)}`,
+    `Valid options (pick exactly one id, nothing else is valid):`,
+    ...candidates.map((c) => `- ${c.id}: ${c.description}`),
   ].join("\n");
 }
 
@@ -69,7 +73,7 @@ export async function decideAction(
   try {
     const response = await groq.chat.completions.create({
       model: env.GROQ_MODEL,
-      max_tokens: 150,
+      max_tokens: 60,
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [

@@ -35,6 +35,9 @@ export async function processDay(ctx: EconomyContext, simulation: Simulation): P
   await economy.processDailyProduction(ctx, simulationId, economy.foodOutputMultiplier(shock));
   await economy.payWages(ctx, simulationId, gameDay);
   await economy.processLoanMaturities(ctx, simulationId, gameDay);
+  // Bertrand-style undercutting / monopoly drift (prd.md §20) — deterministic,
+  // runs before agents see today's prices, never an agent-chosen action.
+  await economy.adjustPrices(ctx, simulationId);
 
   const businesses = await ctx.repos.businesses.findBySimulation(simulationId, { status: "ACTIVE" });
   const businessCounts = businesses.reduce<Record<string, number>>((acc, b) => {

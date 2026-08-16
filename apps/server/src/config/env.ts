@@ -34,10 +34,12 @@ export const env = {
   GROQ_MODEL: process.env.GROQ_MODEL ?? "llama-3.1-8b-instant",
   // Concurrent in-flight agent decision calls per cycle — Groq is fast enough
   // that latency is dominated by round trips, not tokens/sec, so batching
-  // many agents' decisions concurrently is the actual lever. Kept modest by
-  // default to stay under free-tier rate limits; raise it if your Groq tier
-  // allows more.
-  DECISION_CONCURRENCY: Number(process.env.DECISION_CONCURRENCY ?? 8),
+  // many agents' decisions concurrently is the actual lever. Default is
+  // tuned for Groq's free/on-demand tier (6000 TPM on llama-3.1-8b-instant
+  // as of writing) — firing more than a handful of requests in the same
+  // instant reliably overshoots that bucket. Raise it if your Groq tier
+  // allows more; rate-limited calls fall back gracefully either way.
+  DECISION_CONCURRENCY: Number(process.env.DECISION_CONCURRENCY ?? 4),
 
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:5173",
 };

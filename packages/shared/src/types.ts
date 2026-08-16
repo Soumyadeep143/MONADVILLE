@@ -129,6 +129,8 @@ export interface Property {
   constructionValue: number;
   marketValue: number;
   businessId: string | null;
+  /** Listed on the peer-to-peer property market at `marketValue` — see economy/property.ts. */
+  forSale: boolean;
   createdAt: string;
   updatedAt: string;
 }

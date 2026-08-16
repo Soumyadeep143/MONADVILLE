@@ -26,7 +26,9 @@ npm run simulate                     # headless: 20 agents x 30 days, prints prd
 npm test                             # vitest units (tax math, loan limits, gini, business failure)
 ```
 
-Set `GROQ_API_KEY` to have agents use Groq for decisions; without it (or on any LLM failure), agents run on a deterministic personality-weighted fallback policy — the simulation always runs. Agent decisions within a cycle are fanned out concurrently (`DECISION_CONCURRENCY`, default 8) since the LLM round trip — not local computation — is what dominates a cycle's wall-clock time; only the state-mutating execution step is serialized.
+Set `GROQ_API_KEY` to have agents use Groq for decisions; without it (or on any LLM failure), agents run on a deterministic personality-weighted fallback policy — the simulation always runs. Agent decisions within a cycle are fanned out concurrently (`DECISION_CONCURRENCY`, default 8) since the LLM round trip — not local computation — is what dominates a cycle's wall-clock time; only the state-mutating execution step is serialized. A full 20-agent/30-day run against real Groq is on the order of 15–20 minutes at the default concurrency (~1800 decision calls) — fine for the background scheduler, but don't expect the headless script to finish quickly with a key set; unset `GROQ_API_KEY` for a fast fallback-only run when you just want to check the economics.
+
+**Gotcha:** `apps/server` resolves `@econforge/shared` through its **compiled** `dist/`, not live source — if you edit anything under `packages/shared/src` while `npm run dev:server` is running, rebuild it (`npm run build -w packages/shared`) or the dev server will crash-loop on the stale export until you do.
 
 ## Layout
 

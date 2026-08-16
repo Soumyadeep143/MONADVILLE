@@ -27,13 +27,13 @@ async function execute(ctx: EconomyContext, agent: Agent, action: SelectedAction
       return "Visited the theatre.";
     }
     case "BUY_PROPERTY": {
-      await economy.buyProperty(ctx, agent, simulationId, gameDay);
-      return "Bought land.";
+      const bought = await economy.buyProperty(ctx, agent, simulationId, gameDay, action.targetId);
+      return action.targetId ? `Bought a listed property for ${bought.marketValue}.` : "Bought unclaimed land.";
     }
     case "SELL_PROPERTY": {
       if (!action.targetId) throw new ActionError("INVALID_PROPERTY", "SELL_PROPERTY requires a target property");
-      await economy.sellProperty(ctx, agent, action.targetId, simulationId, gameDay);
-      return "Sold property.";
+      await economy.listPropertyForSale(ctx, agent, action.targetId, simulationId, gameDay);
+      return "Listed property for sale.";
     }
     case "START_FARM":
     case "START_RESTAURANT":

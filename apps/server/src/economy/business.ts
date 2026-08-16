@@ -35,7 +35,7 @@ export async function startBusiness(
   gameDay: number,
 ): Promise<Business> {
   const spareLand = (await ctx.repos.properties.findByOwner(agent.id)).find(
-    (p) => p.type === "LAND" && p.businessId === null,
+    (p) => p.type === "LAND" && p.businessId === null && !p.forSale,
   );
 
   let propertyId: string;
@@ -69,6 +69,7 @@ export async function startBusiness(
       constructionValue: BUSINESS_PROPERTY_COST / 2,
       marketValue: BUSINESS_PROPERTY_COST,
       businessId: null,
+      forSale: false,
     });
     propertyId = created.id;
   }

@@ -11,6 +11,7 @@ import { requireAuth, devAuthProvider } from "../auth/index.js";
 import { env } from "../config/env.js";
 import { getEconomyContext } from "./context.js";
 import { asyncHandler, sendError } from "./respond.js";
+import { idempotent } from "./idempotency.js";
 import * as SimulationEngine from "../simulation/SimulationEngine.js";
 import { computeFullAnalytics } from "../analytics/index.js";
 
@@ -155,6 +156,7 @@ router.get(
 router.post(
   "/simulations",
   requireAuth,
+  idempotent,
   asyncHandler(async (req, res) => {
     const body = createSimulationSchema.parse(req.body);
     const ctx = await getEconomyContext();
@@ -178,6 +180,7 @@ router.get(
 router.post(
   "/simulations/:simulationId/start",
   requireAuth,
+  idempotent,
   asyncHandler(async (req, res) => {
     const ctx = await getEconomyContext();
     res.json(await SimulationEngine.startSimulation(ctx, req.params.simulationId));
@@ -186,6 +189,7 @@ router.post(
 router.post(
   "/simulations/:simulationId/pause",
   requireAuth,
+  idempotent,
   asyncHandler(async (req, res) => {
     const ctx = await getEconomyContext();
     res.json(await SimulationEngine.pauseSimulation(ctx, req.params.simulationId));
@@ -194,6 +198,7 @@ router.post(
 router.post(
   "/simulations/:simulationId/resume",
   requireAuth,
+  idempotent,
   asyncHandler(async (req, res) => {
     const ctx = await getEconomyContext();
     res.json(await SimulationEngine.resumeSimulation(ctx, req.params.simulationId));
@@ -202,6 +207,7 @@ router.post(
 router.post(
   "/simulations/:simulationId/stop",
   requireAuth,
+  idempotent,
   asyncHandler(async (req, res) => {
     const ctx = await getEconomyContext();
     res.json(await SimulationEngine.stopSimulation(ctx, req.params.simulationId));

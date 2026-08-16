@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
+import AgentProfile from "./AgentProfile.js";
 
 interface FeedItem {
   key: string;
@@ -14,6 +15,7 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
   const [leaderboard, setLeaderboard] = useState<any>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,7 +164,7 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
           </thead>
           <tbody>
             {leaderboard?.ranked?.slice(0, 10).map((row: any, i: number) => (
-              <tr key={row.agentId}>
+              <tr key={row.agentId} onClick={() => setSelectedAgentId(row.agentId)} style={{ cursor: "pointer" }}>
                 <td>{i + 1}</td>
                 <td>{row.agentId.slice(0, 10)}</td>
                 <td>{Math.round(row.score * 100) / 100}</td>
@@ -170,7 +172,10 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
             ))}
           </tbody>
         </table>
+        <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>Click a row to view that agent's profile.</p>
       </div>
+
+      {selectedAgentId && <AgentProfile agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} />}
 
       <div className="card">
         <h3>Live decision &amp; transaction terminal</h3>
