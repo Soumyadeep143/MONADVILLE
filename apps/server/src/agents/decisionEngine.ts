@@ -19,6 +19,13 @@ const SYSTEM_PROMPT =
   'You choose exactly one action for a simulated economic agent from a fixed list of options. ' +
   'Respond with ONLY a JSON object of the form {"selectedOptionId": "<id from the list>", "reasonCode": "<SHORT_UPPER_SNAKE_CASE>"} — no other text, no markdown fences.';
 
+// Distinguishes "the model answered but picked an id outside the candidate
+// list" from network/parse failures — flow.md §16 "invalid agent action":
+// reject, never execute, optionally allow one retry. Network/timeout errors
+// already get the SDK's own maxRetries; this is the one extra retry for a
+// structurally-valid-but-wrong response specifically.
+class InvalidSelectionError extends Error {}
+
 let client: Groq | null = null;
 function getClient(): Groq | null {
   if (!env.GROQ_API_KEY) return null;
@@ -69,7 +76,7 @@ async function decideWithGroq(agent: Agent, candidates: CandidateAction[], marke
 
   const parsed = llmDecisionSchema.parse(JSON.parse(text));
   const chosen = candidates.find((c) => c.id === parsed.selectedOptionId);
-  if (!chosen) throw new Error(`LLM selected an option id not in the candidate list: ${parsed.selectedOptionId}`);
+  if (!chosen) throw new InvalidSelectionError(`LLM selected an option id not in the candidate list: ${parsed.selectedOptionId}`);
 
   return { action: chosen.action, targetId: chosen.targetId, amount: chosen.amount, reasonCode: parsed.reasonCode };
 }
@@ -114,7 +121,13 @@ export async function decideAction(
 
   // policy === "LLM"
   try {
-    const selected = await decideWithGroq(agent, candidates, marketSummary, gameDay);
+    let selected: SelectedAction;
+    try {
+      selected = await decideWithGroq(agent, candidates, marketSummary, gameDay);
+    } catch (err) {
+      if (!(err instanceof InvalidSelectionError)) throw err;
+      selected = await decideWithGroq(agent, candidates, marketSummary, gameDay); // one retry, invalid selection only
+    }
     return { selected, source: "LLM", model: env.GROQ_MODEL };
   } catch {
     return { selected: pickFallbackAction(agent, candidates, seed, gameDay), source: "PERSONALITY", model: null };

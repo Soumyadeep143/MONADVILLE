@@ -62,7 +62,13 @@ export async function processDay(ctx: EconomyContext, simulation: Simulation): P
   // and always runs strictly sequentially in a fixed order afterward, so an
   // agent never has two decisions in flight and a given seed+day stays
   // reproducible (flow.md §15 replay) regardless of network timing.
-  const agentIds = (await ctx.repos.agents.findBySimulation(simulationId)).map((a) => a.id).sort((a, b) => a.localeCompare(b));
+  // Sorted by userId, not the DB-assigned agent.id: execution order must be
+  // stable across runs sharing a seed (flow.md §15 replay) even though a
+  // fresh/replayed run's agents get entirely different surrogate ids.
+  const agentIds = (await ctx.repos.agents.findBySimulation(simulationId))
+    .slice()
+    .sort((a, b) => a.userId.localeCompare(b.userId))
+    .map((a) => a.id);
   for (let cycle = 0; cycle < DECISION_CYCLES_PER_DAY; cycle++) {
     const agents = (await Promise.all(agentIds.map((id) => ctx.repos.agents.findById(id)))).filter((a): a is NonNullable<typeof a> => a !== null);
 

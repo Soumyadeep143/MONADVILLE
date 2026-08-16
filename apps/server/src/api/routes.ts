@@ -13,6 +13,7 @@ import { getEconomyContext } from "./context.js";
 import { asyncHandler, sendError } from "./respond.js";
 import { idempotent } from "./idempotency.js";
 import * as SimulationEngine from "../simulation/SimulationEngine.js";
+import { replaySimulation } from "../simulation/replay.js";
 import { computeFullAnalytics } from "../analytics/index.js";
 
 const DEFAULT_PERSONALITY: Personality = { risk: 50, spending: 50, ethics: 50, confidence: 50, fomo: 50 };
@@ -411,6 +412,19 @@ router.get(
     const simulation = await ctx.repos.simulations.findById(req.params.simulationId);
     if (!simulation) return sendError(res, 404, "NOT_FOUND", "Simulation not found");
     res.json(await computeFullAnalytics(ctx, req.params.simulationId));
+  }),
+);
+
+// flow.md §15 — re-runs a COMPLETED, non-LLM-policy simulation from its
+// stored seed/rules/population and reports whether the final analytics
+// match (proves the "same experiment, same seed" reproducibility claim from
+// roadmap.md Phase 9's DoD on demand, not just via scripts/run-experiment.ts).
+router.post(
+  "/simulations/:simulationId/replay",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const ctx = await getEconomyContext(req.params.simulationId);
+    res.json(await replaySimulation(ctx, req.params.simulationId));
   }),
 );
 

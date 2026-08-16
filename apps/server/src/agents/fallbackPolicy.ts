@@ -6,6 +6,9 @@ import { seededRandom, hashString } from "../simulation/random.js";
  * configured, or the LLM call/validation fails (architecture.md §9,
  * flow.md §16 "LLM failure: choose deterministic fallback action").
  * Weighted by personality, with hard survival/debt overrides first.
+ * Salts on userId rather than the DB-assigned agent.id — see the comment on
+ * pickRandomAction in policies.ts for why (reproducibility across replays
+ * and persistent stores).
  */
 export function pickFallbackAction(agent: Agent, candidates: CandidateAction[], seed: number, gameDay: number): SelectedAction {
   const byAction = (action: string) => candidates.filter((c) => c.action === action);
@@ -19,7 +22,7 @@ export function pickFallbackAction(agent: Agent, candidates: CandidateAction[], 
 
   const weighted = candidates.map((c) => ({ candidate: c, weight: weightOf(agent, c) }));
   const total = weighted.reduce((sum, w) => sum + w.weight, 0);
-  const roll = seededRandom(seed, gameDay, hashString(agent.id)) * total;
+  const roll = seededRandom(seed, gameDay, hashString(agent.userId)) * total;
 
   let cursor = 0;
   for (const { candidate, weight } of weighted) {

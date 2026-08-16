@@ -4,12 +4,16 @@ Controlled multi-agent economic simulation. See `docs/` for the full spec (`prd.
 
 ## Status
 
-Everything runs today on in-memory stand-ins for the two pieces owned by other teammates:
+Real, persistent, multiplayer-ready today:
 
-- **MongoDB persistence** — `apps/server/src/persistence/mongo/README.md`
-- **Monad ledger / smart contract** — `contracts/README.md`
+- **Game data** — MongoDB (`apps/server/src/persistence/mongo/`), or Postgres via Supabase (`apps/server/src/persistence/supabase/`) — same `Repositories` interface, pick either with `PERSISTENCE_DRIVER=mongo|supabase` in `.env`.
+- **Accounts** — Supabase Auth (`AUTH_DRIVER=supabase`) — real email/password sign-in (`apps/web/src/Login.tsx`), verified server-side on every request (`apps/server/src/auth/supabaseAuth.ts`). Two players signing in from two different machines see the same shared simulations, because nothing about game state ever lived in browser storage — only the Supabase session token does, and that's Supabase's own, not a hand-rolled one.
 
-Flip `PERSISTENCE_DRIVER=mongo` / `LEDGER_DRIVER=monad` in `.env` once those are implemented; nothing else in the codebase needs to change (see `apps/server/src/persistence/repositories/index.ts` and `apps/server/src/blockchain/LedgerService.ts` for the interfaces).
+Still an in-memory stand-in for the one piece owned by a separate teammate:
+
+- **Monad ledger / smart contract** — `contracts/README.md`. Flip `LEDGER_DRIVER=monad` in `.env` once it's implemented against `apps/server/src/blockchain/LedgerService.ts`; nothing else in the codebase needs to change.
+
+`PERSISTENCE_DRIVER=memory` / `AUTH_DRIVER=dev` remain the zero-external-services defaults in `.env.example`, so a fresh clone still runs with nothing configured — copy `.env` from that and fill in real credentials only when you want the shared/multiplayer path.
 
 ## Run it
 
@@ -18,6 +22,7 @@ npm install
 npm run build -w packages/shared     # required once before dev/simulate/test
 
 cp .env.example .env                 # every default runs with zero external services
+cp apps/web/.env.example apps/web/.env  # only needed if AUTH_DRIVER=supabase — the dashboard needs its own Supabase project ref/anon key (Vite only reads VITE_-prefixed vars from here, not the root .env)
 
 npm run dev:server                   # API on :4000
 npm run dev:web                      # dashboard on :5173
@@ -34,6 +39,10 @@ Set `GROQ_API_KEY` to have agents use Groq for decisions; without it (or on any 
 Every simulation picks a `decisionPolicy` at creation (dashboard dropdown, or the API's `decisionPolicy` field): `LLM` (Groq, falls back to `PERSONALITY` on any failure — the default), `PERSONALITY` (the same deterministic personality-weighted policy, but never touches the LLM), `RANDOM` (uniform pick among valid actions), or `RATIONAL` (a fixed, personality-blind utility ranking). Only `LLM` is non-deterministic run-to-run; the other three give identical results for the same seed, which is what makes them useful as baselines to compare personality-driven behavior against.
 
 Simulations also accept a `rulesOverride` (tax rate, wage, loan terms, worker requirement) and a pinned `seed`, so `npm run experiment` can hold a population and rules constant while varying just the policy, or hold the policy constant while varying the rules — see `scripts/run-experiment.ts` for the scenario battery and `apps/server/src/simulation/populations.ts` for the seeded population generators (homogeneous / heterogeneous / trait-skewed).
+
+### Seeded replay (flow.md §15 / roadmap.md Phase 10)
+
+`POST /simulations/:id/replay` re-runs a **completed** simulation from its stored seed, rules, and population under the same policy, then diffs the two runs' final analytics — proving the seed-reproducibility claim above on demand, not just via the batch experiment script. Only `PERSONALITY`/`RANDOM`/`RATIONAL` are replayable (`LLM` calls a live model and is documented as non-deterministic); the dashboard's simulation view exposes a "Run replay" button once a run of one of those policies completes. See `apps/server/src/simulation/replay.ts`.
 
 **Gotcha:** `apps/server` resolves `@econforge/shared` through its **compiled** `dist/`, not live source — if you edit anything under `packages/shared/src` while `npm run dev:server` is running, rebuild it (`npm run build -w packages/shared`) or the dev server will crash-loop on the stale export until you do.
 

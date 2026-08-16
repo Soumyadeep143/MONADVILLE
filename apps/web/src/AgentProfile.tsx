@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
+import { shortId } from "./format.js";
 
 export default function AgentProfile({ agentId, onClose }: { agentId: string; onClose: () => void }) {
   const [agent, setAgent] = useState<any>(null);
@@ -21,11 +22,15 @@ export default function AgentProfile({ agentId, onClose }: { agentId: string; on
   return (
     <div className="card">
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <h3>Agent {agentId.slice(0, 10)}</h3>
+        <h3>Agent {shortId(agentId, 10)}</h3>
         <button onClick={onClose}>Close</button>
       </div>
 
-      {!agent && <p style={{ color: "var(--muted)" }}>Loading...</p>}
+      {!agent && (
+        <p style={{ color: "var(--muted)" }}>
+          <span className="spinner" /> Loading...
+        </p>
+      )}
 
       {agent && (
         <>

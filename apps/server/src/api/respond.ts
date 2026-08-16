@@ -35,10 +35,6 @@ export function asyncHandler(fn: Handler): RequestHandler {
         sendError(res, 400, "INVALID_ACTION", err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
         return;
       }
-      if (err instanceof Error && err.message === "Simulation not found") {
-        sendError(res, 404, "NOT_FOUND", err.message);
-        return;
-      }
       // eslint-disable-next-line no-console
       console.error(err);
       sendError(res, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Unexpected error");

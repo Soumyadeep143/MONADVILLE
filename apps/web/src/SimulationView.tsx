@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import AgentProfile from "./AgentProfile.js";
+import { shortId } from "./format.js";
 
 interface FeedItem {
   key: string;
@@ -16,6 +17,9 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
   const [analytics, setAnalytics] = useState<any>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [replay, setReplay] = useState<any>(null);
+  const [replayBusy, setReplayBusy] = useState(false);
+  const [replayError, setReplayError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,12 +46,12 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
         ...decisions.map((d: any) => ({
           key: `dec_${d.id}`,
           at: d.createdAt,
-          text: `[DECISION] agent ${d.agentId.slice(0, 8)} day ${d.gameDay}: ${d.selectedAction.action}${d.selectedAction.targetId ? ` -> ${d.selectedAction.targetId.slice(0, 8)}` : ""} (${d.selectedAction.reasonCode}) [${d.source}]`,
+          text: `[DECISION] agent ${shortId(d.agentId)} day ${d.gameDay}: ${d.selectedAction.action}${d.selectedAction.targetId ? ` -> ${shortId(d.selectedAction.targetId)}` : ""} (${d.selectedAction.reasonCode}) [${d.source}]`,
         })),
         ...txs.map((t: any) => ({
           key: `tx_${t.id}`,
           at: t.createdAt,
-          text: `[TX ${t.type}] ${(t.fromAgentId ?? "TREASURY").slice(0, 8)} -> ${(t.toAgentId ?? "TREASURY").slice(0, 8)}: ${t.netAmount} (tax ${t.taxAmount}) status=${t.blockchain.status}`,
+          text: `[TX ${t.type}] ${shortId(t.fromAgentId ?? "TREASURY")} -> ${shortId(t.toAgentId ?? "TREASURY")}: ${t.netAmount} (tax ${t.taxAmount}) status=${t.blockchain.status}`,
         })),
       ].sort((a, b) => b.at.localeCompare(a.at));
 
@@ -62,7 +66,26 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
     };
   }, [simulationId]);
 
-  if (!simulation) return <p>Loading...</p>;
+  async function runReplay() {
+    setReplayBusy(true);
+    setReplayError(null);
+    try {
+      setReplay(await api.replaySimulation(simulationId));
+    } catch (err) {
+      setReplayError(err instanceof Error ? err.message : "Replay failed");
+    } finally {
+      setReplayBusy(false);
+    }
+  }
+
+  if (!simulation)
+    return (
+      <p style={{ color: "var(--muted)" }}>
+        <span className="spinner" /> Loading...
+      </p>
+    );
+
+  const canReplay = simulation.status === "COMPLETED" && simulation.decisionPolicy !== "LLM";
 
   return (
     <div>
@@ -71,7 +94,9 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
         <div className="row">
           <span className={`badge ${simulation.status.toLowerCase()}`}>{simulation.status}</span>
           {simulation.status === "RUNNING" && <button onClick={() => api.pauseSimulation(simulationId)}>Pause</button>}
-          {simulation.status === "PAUSED" && <button onClick={() => api.resumeSimulation(simulationId)}>Resume</button>}
+          {(simulation.status === "PAUSED" || simulation.status === "FAILED") && (
+            <button onClick={() => api.resumeSimulation(simulationId)}>{simulation.status === "FAILED" ? "Retry" : "Resume"}</button>
+          )}
           {(simulation.status === "RUNNING" || simulation.status === "PAUSED") && <button onClick={() => api.stopSimulation(simulationId)}>Stop</button>}
         </div>
       </div>
@@ -152,6 +177,58 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
         </div>
       )}
 
+      {simulation.status === "COMPLETED" && (
+        <div className="card">
+          <h3>Seeded replay</h3>
+          {canReplay ? (
+            <p style={{ color: "var(--muted)", fontSize: 12 }}>
+              Re-runs this simulation from its stored seed, rules, and population under the same ({simulation.decisionPolicy}) policy, then
+              checks whether the final analytics match — proving the run is reproducible.
+            </p>
+          ) : (
+            <p style={{ color: "var(--muted)", fontSize: 12 }}>
+              This simulation used the LLM policy, which calls a live model and isn't deterministic — replay only supports
+              PERSONALITY/RANDOM/RATIONAL policies.
+            </p>
+          )}
+          {canReplay && (
+            <button onClick={runReplay} disabled={replayBusy}>
+              {replayBusy ? (
+                <>
+                  <span className="spinner" /> Replaying...
+                </>
+              ) : (
+                "Run replay"
+              )}
+            </button>
+          )}
+          {replayError && <p style={{ color: "var(--bad)" }}>{replayError}</p>}
+          {replay && (
+            <div className="grid" style={{ marginTop: 12 }}>
+              <div className="stat">
+                <div className="label">Result</div>
+                <div className="value" style={{ color: replay.matches ? "var(--accent)" : "var(--bad)" }}>
+                  {replay.matches ? "MATCH" : "DIVERGED"}
+                </div>
+              </div>
+              <div className="stat">
+                <div className="label">Divergences</div>
+                <div className="value">{replay.divergences.length}</div>
+              </div>
+            </div>
+          )}
+          {replay && replay.divergences.length > 0 && (
+            <div className="terminal" style={{ height: 120, marginTop: 12 }}>
+              {replay.divergences.map((d: string, i: number) => (
+                <div className="terminal-line" key={i}>
+                  {d}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="card">
         <h3>Wealth leaderboard</h3>
         <table>
@@ -166,7 +243,7 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
             {leaderboard?.ranked?.slice(0, 10).map((row: any, i: number) => (
               <tr key={row.agentId} onClick={() => setSelectedAgentId(row.agentId)} style={{ cursor: "pointer" }}>
                 <td>{i + 1}</td>
-                <td>{row.agentId.slice(0, 10)}</td>
+                <td>{shortId(row.agentId, 10)}</td>
                 <td>{Math.round(row.score * 100) / 100}</td>
               </tr>
             ))}

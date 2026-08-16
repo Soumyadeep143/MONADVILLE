@@ -1,31 +1,35 @@
+import { supabase } from "./supabaseClient.js";
+
 const BASE = "/api/v1";
 
-export function getToken(): string | null {
-  return localStorage.getItem("econforge_token");
+// Real, server-confirmed identity for a signed-in Supabase user — populated
+// once by App.tsx right after auth (via GET /me, which is what actually
+// creates/looks up the internal User row keyed by the Supabase auth id).
+// Deliberately an in-memory module variable, not localStorage: the one
+// piece of client-side persistence this app now has is Supabase's own
+// session (see supabaseClient.ts) — we don't keep a second, separate copy
+// of who's logged in.
+let cachedIdentity: { userId: string; displayName: string } | null = null;
+
+export function setIdentity(userId: string, displayName: string): void {
+  cachedIdentity = { userId, displayName };
 }
 
-export function setSession(token: string, userId: string, displayName: string) {
-  localStorage.setItem("econforge_token", token);
-  localStorage.setItem("econforge_user_id", userId);
-  localStorage.setItem("econforge_display_name", displayName);
+export function clearIdentity(): void {
+  cachedIdentity = null;
 }
 
 export function getSessionUserId(): string | null {
-  return localStorage.getItem("econforge_user_id");
+  return cachedIdentity?.userId ?? null;
 }
 
 export function getDisplayName(): string | null {
-  return localStorage.getItem("econforge_display_name");
-}
-
-export function clearSession() {
-  localStorage.removeItem("econforge_token");
-  localStorage.removeItem("econforge_user_id");
-  localStorage.removeItem("econforge_display_name");
+  return cachedIdentity?.displayName ?? null;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   const headers: Record<string, string> = { "Content-Type": "application/json", ...(options.headers as Record<string, string>) };
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -38,7 +42,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  devLogin: (displayName: string) => request<{ token: string; userId: string; displayName: string }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName }) }),
   me: () => request<{ id: string; displayName: string; agentCount: number }>("/me"),
   getQuestionnaire: () => request<{ version: string; questions: { id: string; type: string; text: string; options: { id: string; label: string }[] }[] }>("/questionnaire"),
   submitQuestionnaire: (answers: { questionId: string; optionId: string }[]) =>
@@ -51,6 +54,7 @@ export const api = {
   pauseSimulation: (id: string) => request<any>(`/simulations/${id}/pause`, { method: "POST" }),
   resumeSimulation: (id: string) => request<any>(`/simulations/${id}/resume`, { method: "POST" }),
   stopSimulation: (id: string) => request<any>(`/simulations/${id}/stop`, { method: "POST" }),
+  replaySimulation: (id: string) => request<any>(`/simulations/${id}/replay`, { method: "POST" }),
   getWorld: (id: string) => request<any>(`/simulations/${id}/world`),
   getEconomy: (id: string) => request<any>(`/simulations/${id}/economy`),
   getLeaderboard: (id: string, type: string) => request<any>(`/simulations/${id}/leaderboard?type=${type}`),

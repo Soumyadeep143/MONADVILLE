@@ -4,11 +4,15 @@ import { toSelected } from "./fallbackPolicy.js";
 
 /**
  * RANDOM baseline (prd.md §22): uniform pick among currently-valid
- * candidates, personality-blind. Deterministic given (seed, day, agentId)
- * so repeated experiment runs are comparable.
+ * candidates, personality-blind. Deterministic given (seed, day, userId) so
+ * repeated experiment runs — and replays (flow.md §15) — are comparable.
+ * Salts on userId, not the DB-assigned agent.id: the latter is a surrogate
+ * key that a fresh/replayed run won't reproduce (e.g. a persistent store's
+ * auto-incrementing id keeps climbing across runs), which would silently
+ * break reproducibility even with the same seed.
  */
 export function pickRandomAction(agent: Agent, candidates: CandidateAction[], seed: number, gameDay: number): SelectedAction {
-  const roll = seededRandom(seed, gameDay, hashString(agent.id) + 1); // +1 salt: decorrelate from the personality-fallback's own roll
+  const roll = seededRandom(seed, gameDay, hashString(agent.userId) + 1); // +1 salt: decorrelate from the personality-fallback's own roll
   const index = Math.min(candidates.length - 1, Math.floor(roll * candidates.length));
   return toSelected(candidates[index], "RANDOM_BASELINE");
 }
