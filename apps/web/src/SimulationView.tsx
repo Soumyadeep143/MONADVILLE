@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
 import AgentProfile from "./AgentProfile.js";
+import WorldView from "./WorldView.js";
 import { shortId } from "./format.js";
 
 interface FeedItem {
@@ -99,6 +100,15 @@ export default function SimulationView({ simulationId, onBack }: { simulationId:
           )}
           {(simulation.status === "RUNNING" || simulation.status === "PAUSED") && <button onClick={() => api.stopSimulation(simulationId)}>Stop</button>}
         </div>
+      </div>
+
+      <div className="card">
+        <h3>World</h3>
+        <WorldView simulationId={simulationId} />
+        <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 8 }}>
+          Green dots are employed agents, gray are unemployed. Positions are approximate (derived from ids, not real coordinates) — watch
+          for speech bubbles when an agent's latest decision changes.
+        </p>
       </div>
 
       <div className="card">
