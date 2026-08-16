@@ -10,24 +10,24 @@ import { takeLoan, repayLoan } from "../economy/loan.js";
 const SIMULATION_ID = "sim1";
 const STARTING_CASH = 1000;
 
-async function makeAgent(ctx: EconomyContext): Promise<Agent> {
+async function makeAgent(ctx: EconomyContext, cash = STARTING_CASH): Promise<Agent> {
   const agent = await ctx.repos.agents.create({
     userId: "user1",
     simulationId: SIMULATION_ID,
     personality: { risk: 50, spending: 50, ethics: 50, confidence: 50, fomo: 50 },
-    economic: { cash: STARTING_CASH, outstandingDebt: 0, totalBorrowed: 0, totalRepaid: 0, totalInterestPaid: 0, totalIncome: 0, totalExpenses: 0 },
+    economic: { cash, outstandingDebt: 0, totalBorrowed: 0, totalRepaid: 0, totalInterestPaid: 0, totalIncome: 0, totalExpenses: 0 },
     state: { hunger: 0, employmentStatus: "UNEMPLOYED", employerId: null, propertyIds: [], businessIds: [] },
     reputation: { score: STARTING_REPUTATION, history: [] },
     activity: { score: 0, history: [] },
     statistics: { transactions: 0, theatreVisits: 0, loansTaken: 0, loansRepaid: 0, loansDefaulted: 0, businessesCreated: 0, businessesFailed: 0 },
     memory: [],
   });
-  await ctx.ledger.registerAgent(SIMULATION_ID, agent.id, STARTING_CASH);
+  await ctx.ledger.registerAgent(SIMULATION_ID, agent.id, cash);
   return agent;
 }
 
 async function seedTreasury(ctx: EconomyContext, amount: number) {
-  const donor = await makeAgent(ctx);
+  const donor = await makeAgent(ctx, amount);
   await ctx.ledger.transfer({ simulationId: SIMULATION_ID, fromAgentId: donor.id, toAgentId: null, grossAmount: amount, type: "TRANSFER", gameDay: 0, taxable: false });
 }
 

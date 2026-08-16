@@ -290,7 +290,8 @@ router.get(
       const byOwner = new Map<string, number>();
       for (const b of businesses) byOwner.set(b.ownerAgentId, (byOwner.get(b.ownerAgentId) ?? 0) + b.statistics.revenue);
       const ranked = [...byOwner.entries()].sort((a, b) => b[1] - a[1]).map(([agentId, revenue]) => ({ agentId, revenue }));
-      return res.json({ type, ranked });
+      res.json({ type, ranked });
+      return;
     }
 
     const rank = (score: (agentId: string) => number) =>
