@@ -161,8 +161,21 @@ router.post(
     const body = createSimulationSchema.parse(req.body);
     const ctx = await getEconomyContext();
     const participants = body.agentIds.map((userId) => ({ userId, personality: getCachedPersonality(userId) ?? DEFAULT_PERSONALITY }));
-    const simulation = await SimulationEngine.createSimulation(ctx, { name: body.name, durationDays: body.durationDays, participants });
-    res.status(201).json({ simulationId: simulation.id, status: simulation.status, rulesVersion: simulation.rulesVersion, randomSeed: simulation.randomSeed });
+    const simulation = await SimulationEngine.createSimulation(ctx, {
+      name: body.name,
+      durationDays: body.durationDays,
+      participants,
+      decisionPolicy: body.decisionPolicy,
+      rulesOverride: body.rulesOverride,
+    });
+    res.status(201).json({
+      simulationId: simulation.id,
+      status: simulation.status,
+      rulesVersion: simulation.rulesVersion,
+      randomSeed: simulation.randomSeed,
+      decisionPolicy: simulation.decisionPolicy,
+      rules: simulation.rules,
+    });
   }),
 );
 

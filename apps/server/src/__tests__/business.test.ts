@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { STARTING_REPUTATION, BUSINESS_FAILURE_DAYS } from "@econforge/shared";
+import { STARTING_REPUTATION, BUSINESS_FAILURE_DAYS, DEFAULT_RULES } from "@econforge/shared";
 import type { Agent } from "@econforge/shared";
 import { createInMemoryRepositories } from "../persistence/memory/index.js";
 import { InMemoryLedgerService } from "../blockchain/InMemoryLedgerService.js";
@@ -28,7 +28,7 @@ describe("business 3-day failure rule", () => {
   let ctx: EconomyContext;
 
   beforeEach(() => {
-    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService() };
+    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService(), rules: DEFAULT_RULES };
   });
 
   it("marks a business FAILED after 3 consecutive days of unpaid wages, and never operates with fewer than 2 employees", async () => {

@@ -22,9 +22,26 @@ export const questionnaireSubmitSchema = z.object({
 });
 export type QuestionnaireSubmitInput = z.infer<typeof questionnaireSubmitSchema>;
 
+export const decisionPolicySchema = z.enum(["LLM", "PERSONALITY", "RANDOM", "RATIONAL"]);
+
+export const rulesOverrideSchema = z
+  .object({
+    transactionTaxBps: z.number().int().min(0).max(2000),
+    workerWage: z.number().positive(),
+    loanMaxPercentBps: z.number().int().min(0).max(10000),
+    loanInterestBps: z.number().int().min(0).max(5000),
+    loanDurationDays: z.number().int().positive(),
+    businessWorkers: z.number().int().positive(),
+  })
+  .partial();
+
 export const createSimulationSchema = z.object({
   name: z.string().min(1).max(120),
   durationDays: z.number().int().min(1).max(365).optional(),
   agentIds: z.array(z.string().min(1)).min(1),
+  /** prd.md §22 experiment mode. Defaults to "LLM" (Groq, falling back to PERSONALITY on failure). */
+  decisionPolicy: decisionPolicySchema.optional(),
+  /** Per-simulation overrides of the default rules — see docs/prd.md §22 "tax-rate comparison" / "loan-policy comparison". */
+  rulesOverride: rulesOverrideSchema.optional(),
 });
 export type CreateSimulationInput = z.infer<typeof createSimulationSchema>;

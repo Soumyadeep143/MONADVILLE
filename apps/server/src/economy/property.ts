@@ -19,6 +19,7 @@ async function buyUnclaimedLand(ctx: EconomyContext, agent: Agent, simulationId:
     grossAmount: LAND_VALUE,
     type: "PROPERTY",
     gameDay,
+    taxBps: ctx.rules.transactionTaxBps,
   });
   if (result.status !== "CONFIRMED") {
     throw new ActionError("INSUFFICIENT_FUNDS", result.failureReason ?? "Could not buy property");
@@ -68,6 +69,7 @@ async function buyListedProperty(ctx: EconomyContext, agent: Agent, propertyId: 
     grossAmount: property.marketValue,
     type: "PROPERTY",
     gameDay,
+    taxBps: ctx.rules.transactionTaxBps,
   });
   if (result.status !== "CONFIRMED") {
     throw new ActionError("INSUFFICIENT_FUNDS", result.failureReason ?? "Cannot afford this property");

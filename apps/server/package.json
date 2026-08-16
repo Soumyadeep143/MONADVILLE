@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "simulate": "tsx ../../scripts/run-simulation.ts",
+    "experiment": "tsx ../../scripts/run-experiment.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

@@ -23,6 +23,8 @@ export interface TransferParams {
   gameDay: number;
   /** Per prd.md §12: most transfers are taxed; a few (loan disbursement) are not. Default true. */
   taxable?: boolean;
+  /** Basis points for this transfer's tax, when taxable. Callers pass the active simulation's own rate (EconomyContext.rules.transactionTaxBps) so tax-rate experiments (prd.md §22) actually take effect; defaults to the global 2% constant if omitted. */
+  taxBps?: number;
 }
 
 export interface TransferResult {

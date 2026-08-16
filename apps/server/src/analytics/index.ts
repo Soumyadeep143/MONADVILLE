@@ -28,7 +28,7 @@ export interface FullAnalytics {
   wealth: { average: number; median: number; gini: number; top10Share: number };
   business: { created: number; failed: number; survivalRate: number };
   labor: { averageWage: number; employmentRate: number };
-  finance: { loansIssued: number; defaults: number; treasuryBalance: number };
+  finance: { loansIssued: number; defaults: number; treasuryBalance: number; transactionVolume: number };
   activity: { average: number; highest: number };
 }
 
@@ -37,6 +37,7 @@ export async function computeFullAnalytics(ctx: EconomyContext, simulationId: st
   const agents = await ctx.repos.agents.findBySimulation(simulationId);
   const businesses = await ctx.repos.businesses.findBySimulation(simulationId);
   const loans = await ctx.repos.loans.findBySimulation(simulationId);
+  const transactions = await ctx.repos.transactions.findBySimulation(simulationId);
   const values = await wealthValues(ctx, simulationId);
 
   const businessesCreated = businesses.length;
@@ -67,6 +68,7 @@ export async function computeFullAnalytics(ctx: EconomyContext, simulationId: st
       loansIssued: loans.length,
       defaults: loans.filter((l) => l.status === "DEFAULTED").length,
       treasuryBalance: await ctx.ledger.getTreasuryBalance(simulationId),
+      transactionVolume: transactions.filter((t) => t.blockchain.status === "CONFIRMED").length,
     },
     activity: {
       average: Math.round(average(activityScores) * 100) / 100,

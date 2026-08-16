@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { DEFAULT_MEAL_PRICE } from "@econforge/shared";
+import { DEFAULT_MEAL_PRICE, DEFAULT_RULES } from "@econforge/shared";
 import { createInMemoryRepositories } from "../persistence/memory/index.js";
 import { InMemoryLedgerService } from "../blockchain/InMemoryLedgerService.js";
 import type { EconomyContext } from "../economy/context.js";
@@ -28,7 +28,7 @@ describe("Bertrand-style pricing", () => {
   let ctx: EconomyContext;
 
   beforeEach(() => {
-    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService() };
+    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService(), rules: DEFAULT_RULES };
   });
 
   it("undercuts toward the cheapest competitor", async () => {

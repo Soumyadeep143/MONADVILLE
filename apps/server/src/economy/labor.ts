@@ -1,5 +1,5 @@
 import type { Agent, Business } from "@econforge/shared";
-import { WORKER_WAGE, BUSINESS_WORKERS_REQUIRED, ACTIVITY_DELTA } from "@econforge/shared";
+import { ACTIVITY_DELTA } from "@econforge/shared";
 import type { EconomyContext } from "./context.js";
 import { ActionError } from "./errors.js";
 import { recordEvent } from "./record.js";
@@ -7,8 +7,8 @@ import { applyActivityDelta } from "./activity.js";
 
 async function hire(ctx: EconomyContext, business: Business, agent: Agent, gameDay: number): Promise<Business> {
   const updated = await ctx.repos.businesses.update(business.id, {
-    employees: [...business.employees, { agentId: agent.id, wage: WORKER_WAGE }],
-    status: business.employees.length + 1 >= BUSINESS_WORKERS_REQUIRED ? "ACTIVE" : business.status,
+    employees: [...business.employees, { agentId: agent.id, wage: ctx.rules.workerWage }],
+    status: business.employees.length + 1 >= ctx.rules.businessWorkers ? "ACTIVE" : business.status,
   });
   await ctx.repos.agents.update(agent.id, {
     state: { ...agent.state, employmentStatus: "EMPLOYED", employerId: business.ownerAgentId },
@@ -26,7 +26,7 @@ export async function joinBusiness(ctx: EconomyContext, agent: Agent, businessId
   if (!business || business.simulationId !== simulationId || business.status === "FAILED") {
     throw new ActionError("INVALID_BUSINESS", "Business not found or not hiring");
   }
-  if (business.employees.length >= BUSINESS_WORKERS_REQUIRED) {
+  if (business.employees.length >= ctx.rules.businessWorkers) {
     throw new ActionError("INVALID_BUSINESS", "Business has no open positions");
   }
   const updated = await hire(ctx, business, agent, gameDay);
@@ -50,7 +50,7 @@ export async function joinBusiness(ctx: EconomyContext, agent: Agent, businessId
  */
 export async function autoFillVacancies(ctx: EconomyContext, simulationId: string, gameDay: number): Promise<void> {
   const businesses = (await ctx.repos.businesses.findBySimulation(simulationId)).filter(
-    (b) => b.status !== "FAILED" && b.employees.length < BUSINESS_WORKERS_REQUIRED,
+    (b) => b.status !== "FAILED" && b.employees.length < ctx.rules.businessWorkers,
   );
   if (businesses.length === 0) return;
 
@@ -60,7 +60,7 @@ export async function autoFillVacancies(ctx: EconomyContext, simulationId: strin
 
   for (const business of businesses) {
     let current = business;
-    while (current.employees.length < BUSINESS_WORKERS_REQUIRED && unemployed.length > 0) {
+    while (current.employees.length < ctx.rules.businessWorkers && unemployed.length > 0) {
       const [candidate, ...rest] = unemployed;
       unemployed = rest;
       current = await hire(ctx, current, candidate, gameDay);

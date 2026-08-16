@@ -1,17 +1,5 @@
-import type { Personality, Simulation } from "@econforge/shared";
-import {
-  BUSINESS_WORKERS_REQUIRED,
-  LOAN_DURATION_DAYS,
-  LOAN_INTEREST_BPS,
-  LOAN_MAX_PERCENT_BPS,
-  PROMPT_VERSION,
-  RULES_VERSION,
-  SIMULATION_DURATION_DAYS,
-  STARTING_CASH,
-  STARTING_REPUTATION,
-  TRANSACTION_TAX_BPS,
-  WORKER_WAGE,
-} from "@econforge/shared";
+import type { DecisionPolicy, Personality, Simulation, SimulationRules } from "@econforge/shared";
+import { DEFAULT_RULES, PROMPT_VERSION, RULES_VERSION, SIMULATION_DURATION_DAYS, STARTING_CASH, STARTING_REPUTATION } from "@econforge/shared";
 import type { EconomyContext } from "../economy/context.js";
 import { recordEvent } from "../economy/index.js";
 import { processDay } from "./DayProcessor.js";
@@ -23,10 +11,19 @@ export interface SimulationParticipant {
 
 export async function createSimulation(
   ctx: EconomyContext,
-  params: { name: string; durationDays?: number; participants: SimulationParticipant[] },
+  params: {
+    name: string;
+    durationDays?: number;
+    participants: SimulationParticipant[];
+    decisionPolicy?: DecisionPolicy;
+    rulesOverride?: Partial<SimulationRules>;
+    /** Pin the seed instead of randomizing it — prd.md §22 "controlled random seed" for repeatable experiments. */
+    seed?: number;
+  },
 ): Promise<Simulation> {
   const durationDays = params.durationDays ?? SIMULATION_DURATION_DAYS;
-  const randomSeed = Math.floor(Math.random() * 1_000_000_000);
+  const randomSeed = params.seed ?? Math.floor(Math.random() * 1_000_000_000);
+  const rules: SimulationRules = { ...DEFAULT_RULES, ...params.rulesOverride };
 
   const simulation = await ctx.repos.simulations.create({
     name: params.name,
@@ -36,16 +33,9 @@ export async function createSimulation(
     randomSeed,
     durationDays,
     currentDay: 0,
-    rules: {
-      startingCash: STARTING_CASH,
-      transactionTaxBps: TRANSACTION_TAX_BPS,
-      workerWage: WORKER_WAGE,
-      loanMaxPercentBps: LOAN_MAX_PERCENT_BPS,
-      loanInterestBps: LOAN_INTEREST_BPS,
-      loanDurationDays: LOAN_DURATION_DAYS,
-      businessWorkers: BUSINESS_WORKERS_REQUIRED,
-    },
-    metrics: { gini: 0, averageWealth: STARTING_CASH, medianWealth: STARTING_CASH, top10WealthShare: 0, treasuryBalance: 0 },
+    rules,
+    decisionPolicy: params.decisionPolicy ?? "LLM",
+    metrics: { gini: 0, averageWealth: rules.startingCash, medianWealth: rules.startingCash, top10WealthShare: 0, treasuryBalance: 0 },
     startedAt: null,
     completedAt: null,
   });
@@ -55,14 +45,14 @@ export async function createSimulation(
       userId: participant.userId,
       simulationId: simulation.id,
       personality: participant.personality,
-      economic: { cash: STARTING_CASH, outstandingDebt: 0, totalBorrowed: 0, totalRepaid: 0, totalInterestPaid: 0, totalIncome: 0, totalExpenses: 0 },
+      economic: { cash: rules.startingCash, outstandingDebt: 0, totalBorrowed: 0, totalRepaid: 0, totalInterestPaid: 0, totalIncome: 0, totalExpenses: 0 },
       state: { hunger: 0, employmentStatus: "UNEMPLOYED", employerId: null, propertyIds: [], businessIds: [] },
       reputation: { score: STARTING_REPUTATION, history: [] },
       activity: { score: 0, history: [] },
       statistics: { transactions: 0, theatreVisits: 0, loansTaken: 0, loansRepaid: 0, loansDefaulted: 0, businessesCreated: 0, businessesFailed: 0 },
       memory: [],
     });
-    await ctx.ledger.registerAgent(simulation.id, agent.id, STARTING_CASH);
+    await ctx.ledger.registerAgent(simulation.id, agent.id, rules.startingCash);
   }
 
   return simulation;
@@ -97,7 +87,11 @@ export async function runOneDay(ctx: EconomyContext, simulationId: string): Prom
   if (!simulation) throw new Error("Simulation not found");
   if (simulation.status !== "RUNNING") throw new Error(`Simulation is not running (status: ${simulation.status})`);
 
-  const updated = await processDay(ctx, simulation);
+  // Self-correcting: use THIS simulation's own rules regardless of what the
+  // caller's ctx carried — the scheduler shares one ctx across many
+  // simulations that can each have different (experiment) rules.
+  const rulesAwareCtx: EconomyContext = { ...ctx, rules: simulation.rules };
+  const updated = await processDay(rulesAwareCtx, simulation);
 
   if (updated.currentDay >= updated.durationDays) {
     const completed = await ctx.repos.simulations.update(simulationId, { status: "COMPLETED", completedAt: new Date().toISOString() });

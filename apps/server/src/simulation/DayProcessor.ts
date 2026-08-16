@@ -67,7 +67,7 @@ export async function processDay(ctx: EconomyContext, simulation: Simulation): P
     const agents = (await Promise.all(agentIds.map((id) => ctx.repos.agents.findById(id)))).filter((a): a is NonNullable<typeof a> => a !== null);
 
     const prepared = await mapWithConcurrency(agents, env.DECISION_CONCURRENCY, (agent) =>
-      prepareAgentDecision(ctx, agent, simulationId, gameDay, simulation.randomSeed, marketSummary),
+      prepareAgentDecision(ctx, agent, simulationId, gameDay, simulation.randomSeed, marketSummary, simulation.decisionPolicy),
     );
 
     for (const decision of prepared) {

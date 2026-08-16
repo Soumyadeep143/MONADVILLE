@@ -39,7 +39,7 @@ export class InMemoryLedgerService implements LedgerService {
   }
 
   async transfer(params: TransferParams): Promise<TransferResult> {
-    const { simulationId, fromAgentId, toAgentId, grossAmount, taxable = true } = params;
+    const { simulationId, fromAgentId, toAgentId, grossAmount, taxable = true, taxBps = TRANSACTION_TAX_BPS } = params;
     const ledger = this.ledgerFor(simulationId);
 
     if (grossAmount <= 0) {
@@ -51,7 +51,7 @@ export class InMemoryLedgerService implements LedgerService {
       return this.fail("Insufficient funds");
     }
 
-    const taxAmount = taxable ? bps(grossAmount, TRANSACTION_TAX_BPS) : 0;
+    const taxAmount = taxable ? bps(grossAmount, taxBps) : 0;
     const netAmount = Math.round((grossAmount - taxAmount) * 100) / 100;
 
     // Debit sender

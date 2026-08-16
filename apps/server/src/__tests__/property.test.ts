@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { STARTING_REPUTATION, LAND_VALUE } from "@econforge/shared";
+import { STARTING_REPUTATION, LAND_VALUE, DEFAULT_RULES } from "@econforge/shared";
 import type { Agent } from "@econforge/shared";
 import { createInMemoryRepositories } from "../persistence/memory/index.js";
 import { InMemoryLedgerService } from "../blockchain/InMemoryLedgerService.js";
@@ -29,7 +29,7 @@ describe("peer-to-peer property market", () => {
   let ctx: EconomyContext;
 
   beforeEach(() => {
-    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService() };
+    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService(), rules: DEFAULT_RULES };
   });
 
   it("lists a property without moving money, then transfers ownership + payment on peer purchase", async () => {

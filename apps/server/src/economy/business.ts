@@ -1,9 +1,7 @@
 import type { Agent, Business, BusinessType } from "@econforge/shared";
 import {
   BUSINESS_PROPERTY_COST,
-  BUSINESS_WAGE_COST,
   BUSINESS_FAILURE_DAYS,
-  BUSINESS_WORKERS_REQUIRED,
   CONSTRUCTION_VALUE,
   FARM_DAILY_OUTPUT,
   FOOD_UNIT_PRICE,
@@ -48,6 +46,7 @@ export async function startBusiness(
     grossAmount: cost,
     type: "PROPERTY",
     gameDay,
+    taxBps: ctx.rules.transactionTaxBps,
   });
   if (payment.status !== "CONFIRMED") {
     throw new ActionError("INSUFFICIENT_FUNDS", payment.failureReason ?? "Cannot afford to start this business");
@@ -176,6 +175,7 @@ export async function payWages(ctx: EconomyContext, simulationId: string, gameDa
         grossAmount: employee.wage,
         type: "WAGE",
         gameDay,
+        taxBps: ctx.rules.transactionTaxBps,
       });
       if (result.status !== "CONFIRMED") {
         paidAll = false;
@@ -209,7 +209,7 @@ async function checkAndApplyFailure(
   gameDay: number,
   failedToday: boolean,
 ): Promise<void> {
-  const understaffed = business.employees.length < BUSINESS_WORKERS_REQUIRED;
+  const understaffed = business.employees.length < ctx.rules.businessWorkers;
   const failedDays = failedToday || understaffed ? business.statistics.failedDays + 1 : 0;
 
   const patch: Partial<Business> = { statistics: { ...business.statistics, failedDays } };
@@ -277,6 +277,7 @@ async function tradeFood(
     grossAmount: cost,
     type: "PURCHASE",
     gameDay,
+    taxBps: ctx.rules.transactionTaxBps,
   });
   if (result.status !== "CONFIRMED") {
     throw new ActionError("INSUFFICIENT_FUNDS", result.failureReason ?? "Cannot afford food purchase");
@@ -333,6 +334,7 @@ export async function visitTheatre(ctx: EconomyContext, agent: Agent, theatreId:
     grossAmount: theatre.price,
     type: "PURCHASE",
     gameDay,
+    taxBps: ctx.rules.transactionTaxBps,
   });
   if (result.status !== "CONFIRMED") {
     throw new ActionError("INSUFFICIENT_FUNDS", result.failureReason ?? "Cannot afford a ticket");
@@ -365,5 +367,3 @@ export async function visitTheatre(ctx: EconomyContext, agent: Agent, theatreId:
     metadata: { theatreId },
   });
 }
-
-export { BUSINESS_WAGE_COST };

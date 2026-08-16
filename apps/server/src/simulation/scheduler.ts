@@ -1,3 +1,4 @@
+import { DEFAULT_RULES } from "@econforge/shared";
 import { getRepositories } from "../persistence/index.js";
 import { getLedgerService } from "../blockchain/index.js";
 import { runOneDay } from "./SimulationEngine.js";
@@ -21,7 +22,11 @@ export function startScheduler(): void {
     for (const simulation of simulations) {
       if (simulation.status !== "RUNNING" || inFlight.has(simulation.id)) continue;
       inFlight.add(simulation.id);
-      runOneDay({ repos, ledger }, simulation.id)
+      // rules is a placeholder — runOneDay always re-fetches and uses this
+      // simulation's own rules internally (self-correcting; needed since one
+      // shared ctx here spans many simulations that can each run different
+      // experiment rules).
+      runOneDay({ repos, ledger, rules: DEFAULT_RULES }, simulation.id)
         .catch((err) => {
           // eslint-disable-next-line no-console
           console.error(`[scheduler] day advance failed for simulation ${simulation.id}:`, err);

@@ -240,6 +240,14 @@ export interface SimulationMetrics {
   treasuryBalance: number;
 }
 
+// prd.md §22 "research/experiment mode" baselines. LLM tries Groq and falls
+// back to PERSONALITY on any failure (source recorded either way);
+// PERSONALITY/RANDOM/RATIONAL never touch the LLM, so a simulation run
+// under any of them is fully deterministic given the same seed — required
+// for "the same experiment can be repeated using a seed and compared
+// statistically" (roadmap.md Phase 9 DoD).
+export type DecisionPolicy = "LLM" | "PERSONALITY" | "RANDOM" | "RATIONAL";
+
 export interface Simulation {
   id: string;
   name: string;
@@ -250,6 +258,8 @@ export interface Simulation {
   durationDays: number;
   currentDay: number;
   rules: SimulationRules;
+  /** Beyond database.md's documented schema — see docs/prd.md §22. Defaults to "LLM". */
+  decisionPolicy: DecisionPolicy;
   metrics: SimulationMetrics;
   createdAt: string;
   startedAt: string | null;
@@ -264,7 +274,7 @@ export interface User {
   updatedAt: string;
 }
 
-export type DecisionSource = "LLM" | "FALLBACK";
+export type DecisionSource = "LLM" | "PERSONALITY" | "RANDOM" | "RATIONAL";
 
 export interface AgentDecisionRecord {
   id: string;

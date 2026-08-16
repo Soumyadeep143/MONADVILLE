@@ -1,5 +1,14 @@
+import type { SimulationRules } from "./types.js";
+
 // Rules constants — single source of truth, mirrors docs/prd.md.
 // Anything with a Bps suffix is basis points (1/100 of a percent): 200 bps = 2%.
+//
+// These are the *defaults* a new simulation starts from — economy code
+// itself reads the active simulation's `SimulationRules` (EconomyContext.rules),
+// not these constants directly, so a simulation can override tax/wage/loan
+// terms per-run for prd.md §22 controlled experiments. DEFAULT_RULES below
+// (built from these same constants) is what a simulation gets absent an
+// explicit override.
 
 export const RULES_VERSION = "v1";
 export const PROMPT_VERSION = "v1";
@@ -85,3 +94,13 @@ export const ACTIVITY_DELTA = {
 export function bps(amount: number, basisPoints: number): number {
   return Math.round(amount * (basisPoints / 10000) * 100) / 100;
 }
+
+export const DEFAULT_RULES: SimulationRules = {
+  startingCash: STARTING_CASH,
+  transactionTaxBps: TRANSACTION_TAX_BPS,
+  workerWage: WORKER_WAGE,
+  loanMaxPercentBps: LOAN_MAX_PERCENT_BPS,
+  loanInterestBps: LOAN_INTEREST_BPS,
+  loanDurationDays: LOAN_DURATION_DAYS,
+  businessWorkers: BUSINESS_WORKERS_REQUIRED,
+};

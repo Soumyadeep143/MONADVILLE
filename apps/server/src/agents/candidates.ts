@@ -1,5 +1,5 @@
 import type { Agent, Business, CandidateAction } from "@econforge/shared";
-import { BUSINESS_PROPERTY_COST, CONSTRUCTION_VALUE, FOOD_UNIT_PRICE, LAND_VALUE, LOAN_MAX_PERCENT_BPS, bps } from "@econforge/shared";
+import { BUSINESS_PROPERTY_COST, CONSTRUCTION_VALUE, FOOD_UNIT_PRICE, LAND_VALUE, bps } from "@econforge/shared";
 import type { EconomyContext } from "../economy/context.js";
 import { computeNetWorth } from "../economy/loan.js";
 
@@ -35,9 +35,9 @@ export async function generateCandidateActions(
   push({ action: "SAVE", targetId: null, amount: null, description: "Do nothing this turn and hold your cash." });
 
   if (agent.state.employmentStatus === "UNEMPLOYED") {
-    const openings = businesses.filter((b) => b.status !== "FAILED" && b.employees.length < 2).slice(0, 3);
+    const openings = businesses.filter((b) => b.status !== "FAILED" && b.employees.length < ctx.rules.businessWorkers).slice(0, 3);
     for (const b of openings) {
-      push({ action: "WORK", targetId: b.id, amount: null, description: `Join a ${b.type.toLowerCase()} as an employee (wage 20/day).` });
+      push({ action: "WORK", targetId: b.id, amount: null, description: `Join a ${b.type.toLowerCase()} as an employee (wage ${ctx.rules.workerWage}/day).` });
     }
   }
 
@@ -112,7 +112,7 @@ export async function generateCandidateActions(
   const hasOverdue = activeLoans.some((l) => gameDay > l.dueDay);
   if (!hasOverdue) {
     const worth = await computeNetWorth(ctx, agent);
-    const maxLoan = bps(Math.max(worth, 0), LOAN_MAX_PERCENT_BPS);
+    const maxLoan = bps(Math.max(worth, 0), ctx.rules.loanMaxPercentBps);
     const treasuryBalance = await ctx.ledger.getTreasuryBalance(simulationId);
     const suggested = Math.min(maxLoan, treasuryBalance);
     if (suggested >= 10) {

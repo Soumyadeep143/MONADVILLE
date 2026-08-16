@@ -1,8 +1,9 @@
 import Groq from "groq-sdk";
 import { llmDecisionSchema, PROMPT_VERSION } from "@econforge/shared";
-import type { Agent, CandidateAction, SelectedAction } from "@econforge/shared";
+import type { Agent, CandidateAction, DecisionPolicy, DecisionSource, SelectedAction } from "@econforge/shared";
 import { env } from "../config/env.js";
 import { pickFallbackAction } from "./fallbackPolicy.js";
+import { pickRandomAction, pickRationalAction } from "./policies.js";
 import { summarizeMemory } from "./memory.js";
 
 // Structured LLM decision output. The model selects an option id from the
@@ -48,15 +49,46 @@ function buildPrompt(agent: Agent, candidates: CandidateAction[], marketSummary:
   ].join("\n");
 }
 
+async function decideWithGroq(agent: Agent, candidates: CandidateAction[], marketSummary: string, gameDay: number): Promise<SelectedAction> {
+  const groq = getClient();
+  if (!groq) throw new Error("Groq not configured");
+
+  const response = await groq.chat.completions.create({
+    model: env.GROQ_MODEL,
+    max_tokens: 60,
+    temperature: 0.4,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: buildPrompt(agent, candidates, marketSummary, gameDay) },
+    ],
+  });
+
+  const text = response.choices[0]?.message?.content;
+  if (!text) throw new Error("No content in Groq response");
+
+  const parsed = llmDecisionSchema.parse(JSON.parse(text));
+  const chosen = candidates.find((c) => c.id === parsed.selectedOptionId);
+  if (!chosen) throw new Error(`LLM selected an option id not in the candidate list: ${parsed.selectedOptionId}`);
+
+  return { action: chosen.action, targetId: chosen.targetId, amount: chosen.amount, reasonCode: parsed.reasonCode };
+}
+
 /**
- * Resolves one decision cycle for an agent: the deterministic engine has
- * already computed the finite, currently-valid candidate list; this picks
- * exactly one of them (Groq when configured, deterministic fallback
- * otherwise) and never anything outside it. Falls back to the deterministic
- * policy with no API key, on any LLM/parse/validation failure, or when the
- * model returns an id that isn't in the candidate list. Pure and
- * side-effect-free (no state mutation) so callers can run many of these
- * concurrently across agents — see agents/runner.ts.
+ * Resolves one decision cycle for an agent under the simulation's configured
+ * policy (prd.md §22 experiment baselines):
+ *
+ * - LLM: ask Groq; on any failure (no key, timeout, bad JSON, an id outside
+ *   the candidate list) falls back to the deterministic personality policy.
+ * - PERSONALITY: the same deterministic policy, but chosen deliberately —
+ *   never calls the LLM. Fully reproducible given (seed, day), unlike LLM.
+ * - RANDOM / RATIONAL: personality-blind baselines, also fully deterministic.
+ *
+ * Whichever policy runs, the result is one of the engine-generated
+ * candidates — nothing reaches the economy engine that wasn't already
+ * validated as currently legal. Pure and side-effect-free (no state
+ * mutation) so callers can run many of these concurrently across agents —
+ * see agents/runner.ts.
  */
 export async function decideAction(
   agent: Agent,
@@ -64,38 +96,28 @@ export async function decideAction(
   marketSummary: string,
   seed: number,
   gameDay: number,
-): Promise<{ selected: SelectedAction; source: "LLM" | "FALLBACK"; model: string | null }> {
-  const groq = getClient();
-  if (!groq || candidates.length === 0) {
-    return { selected: pickFallbackAction(agent, candidates, seed, gameDay), source: "FALLBACK", model: null };
+  policy: DecisionPolicy = "LLM",
+): Promise<{ selected: SelectedAction; source: DecisionSource; model: string | null }> {
+  if (candidates.length === 0) {
+    return { selected: pickFallbackAction(agent, candidates, seed, gameDay), source: "PERSONALITY", model: null };
   }
 
+  if (policy === "RANDOM") {
+    return { selected: pickRandomAction(agent, candidates, seed, gameDay), source: "RANDOM", model: null };
+  }
+  if (policy === "RATIONAL") {
+    return { selected: pickRationalAction(agent, candidates), source: "RATIONAL", model: null };
+  }
+  if (policy === "PERSONALITY") {
+    return { selected: pickFallbackAction(agent, candidates, seed, gameDay), source: "PERSONALITY", model: null };
+  }
+
+  // policy === "LLM"
   try {
-    const response = await groq.chat.completions.create({
-      model: env.GROQ_MODEL,
-      max_tokens: 60,
-      temperature: 0.4,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildPrompt(agent, candidates, marketSummary, gameDay) },
-      ],
-    });
-
-    const text = response.choices[0]?.message?.content;
-    if (!text) throw new Error("No content in Groq response");
-
-    const parsed = llmDecisionSchema.parse(JSON.parse(text));
-    const chosen = candidates.find((c) => c.id === parsed.selectedOptionId);
-    if (!chosen) throw new Error(`LLM selected an option id not in the candidate list: ${parsed.selectedOptionId}`);
-
-    return {
-      selected: { action: chosen.action, targetId: chosen.targetId, amount: chosen.amount, reasonCode: parsed.reasonCode },
-      source: "LLM",
-      model: env.GROQ_MODEL,
-    };
+    const selected = await decideWithGroq(agent, candidates, marketSummary, gameDay);
+    return { selected, source: "LLM", model: env.GROQ_MODEL };
   } catch {
-    return { selected: pickFallbackAction(agent, candidates, seed, gameDay), source: "FALLBACK", model: null };
+    return { selected: pickFallbackAction(agent, candidates, seed, gameDay), source: "PERSONALITY", model: null };
   }
 }
 

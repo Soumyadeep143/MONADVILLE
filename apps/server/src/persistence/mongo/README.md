@@ -49,3 +49,14 @@ need to change.
   true, and `BUY_PROPERTY` with a target id buys a listing directly from its
   owner (taxed like any transfer). Index it alongside `simulationId` if you
   want the "browse listings" query to be fast at scale.
+- `simulations` gained one field beyond database.md §5: `decisionPolicy:
+  "LLM" | "PERSONALITY" | "RANDOM" | "RATIONAL"` (default `"LLM"`). It's the
+  prd.md §22 experiment-mode baseline selector — read once per day by
+  DayProcessor, never mutated after creation. No index needed.
+- `simulations.rules` is no longer just a record of the constants — economy
+  code actually reads it (`EconomyContext.rules`, threaded through every
+  ledger/loan/wage call) instead of the global default constants, so two
+  simulations can run different tax rates / loan terms concurrently
+  (prd.md §22 "tax-rate comparison" / "loan-policy comparison"). Nothing
+  extra to do here beyond storing whatever `SimulationRules` object you're
+  given — just don't silently coerce it back to the defaults on read.

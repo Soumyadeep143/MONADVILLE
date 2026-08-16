@@ -27,6 +27,7 @@ export async function buyMeal(ctx: EconomyContext, agent: Agent, restaurantId: s
     grossAmount: restaurant.price,
     type: "PURCHASE",
     gameDay,
+    taxBps: ctx.rules.transactionTaxBps,
   });
   if (result.status !== "CONFIRMED") {
     throw new ActionError("INSUFFICIENT_FUNDS", result.failureReason ?? "Cannot afford a meal");

@@ -1,14 +1,5 @@
 import type { Agent } from "@econforge/shared";
-import {
-  LOAN_MAX_PERCENT_BPS,
-  LOAN_INTEREST_BPS,
-  LOAN_DURATION_DAYS,
-  LOAN_DEFAULT_GRACE_DAYS,
-  ACTIVITY_DELTA,
-  REPUTATION_DELTA,
-  bps,
-  netWorth,
-} from "@econforge/shared";
+import { LOAN_DEFAULT_GRACE_DAYS, ACTIVITY_DELTA, REPUTATION_DELTA, bps, netWorth } from "@econforge/shared";
 import type { EconomyContext } from "./context.js";
 import { ActionError } from "./errors.js";
 import { syncAgentCash } from "./sync.js";
@@ -33,7 +24,7 @@ export async function takeLoan(ctx: EconomyContext, agent: Agent, requestedAmoun
   }
 
   const worth = await computeNetWorth(ctx, agent);
-  const maxLoan = bps(Math.max(worth, 0), LOAN_MAX_PERCENT_BPS);
+  const maxLoan = bps(Math.max(worth, 0), ctx.rules.loanMaxPercentBps);
   if (requestedAmount <= 0 || requestedAmount > maxLoan) {
     throw new ActionError("INVALID_LOAN", `Requested amount exceeds 50% of net worth (max ${maxLoan})`);
   }
@@ -42,7 +33,7 @@ export async function takeLoan(ctx: EconomyContext, agent: Agent, requestedAmoun
     throw new ActionError("INSUFFICIENT_TREASURY", "Treasury cannot cover this loan right now");
   }
 
-  const interestAmount = bps(requestedAmount, LOAN_INTEREST_BPS);
+  const interestAmount = bps(requestedAmount, ctx.rules.loanInterestBps);
   const properties = await ctx.repos.properties.findByOwner(agent.id);
   const activeLoanCollateral = new Set(existingLoans.filter((l) => l.status === "ACTIVE").map((l) => l.collateralPropertyId));
   const collateral = properties.find((p) => !p.businessId && !activeLoanCollateral.has(p.id));
@@ -57,13 +48,13 @@ export async function takeLoan(ctx: EconomyContext, agent: Agent, requestedAmoun
     agentId: agent.id,
     principal: requestedAmount,
     outstandingPrincipal: requestedAmount,
-    interestRateBps: LOAN_INTEREST_BPS,
+    interestRateBps: ctx.rules.loanInterestBps,
     interestAmount,
     totalRepayment: requestedAmount + interestAmount,
     collateralPropertyId: collateral?.id ?? null,
     status: "ACTIVE",
     issuedDay: gameDay,
-    dueDay: gameDay + LOAN_DURATION_DAYS,
+    dueDay: gameDay + ctx.rules.loanDurationDays,
     blockchain: { creationTxHash: result.txHash, repaymentTxHash: null },
   });
 

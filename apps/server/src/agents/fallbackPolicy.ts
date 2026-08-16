@@ -61,6 +61,6 @@ function weightOf(agent: Agent, c: CandidateAction): number {
   }
 }
 
-function toSelected(c: CandidateAction, reasonCode: string): SelectedAction {
+export function toSelected(c: CandidateAction, reasonCode: string): SelectedAction {
   return { action: c.action, targetId: c.targetId, amount: c.amount, reasonCode };
 }

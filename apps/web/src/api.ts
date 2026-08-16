@@ -44,8 +44,8 @@ export const api = {
   submitQuestionnaire: (answers: { questionId: string; optionId: string }[]) =>
     request<{ personality: Record<string, number> }>("/questionnaire/submit", { method: "POST", body: JSON.stringify({ version: "v1", answers }) }),
   listSimulations: () => request<any[]>("/simulations"),
-  createSimulation: (name: string, agentIds: string[], durationDays?: number) =>
-    request<{ simulationId: string }>("/simulations", { method: "POST", body: JSON.stringify({ name, agentIds, durationDays }) }),
+  createSimulation: (name: string, agentIds: string[], durationDays?: number, decisionPolicy?: string) =>
+    request<{ simulationId: string }>("/simulations", { method: "POST", body: JSON.stringify({ name, agentIds, durationDays, decisionPolicy }) }),
   getSimulation: (id: string) => request<any>(`/simulations/${id}`),
   startSimulation: (id: string) => request<any>(`/simulations/${id}/start`, { method: "POST" }),
   pauseSimulation: (id: string) => request<any>(`/simulations/${id}/pause`, { method: "POST" }),

@@ -1,4 +1,4 @@
-import type { Agent, CandidateAction, SelectedAction } from "@econforge/shared";
+import type { Agent, CandidateAction, DecisionPolicy, DecisionSource, SelectedAction } from "@econforge/shared";
 import { PROMPT_VERSION } from "@econforge/shared";
 import type { EconomyContext } from "../economy/context.js";
 import { ActionError } from "../economy/errors.js";
@@ -79,17 +79,18 @@ export interface PreparedDecision {
   agentId: string;
   candidates: CandidateAction[];
   selected: SelectedAction;
-  source: "LLM" | "FALLBACK";
+  source: DecisionSource;
   model: string | null;
 }
 
 /**
  * Read-only half of a decision cycle: recalculate state -> generate the
- * deterministic candidate list -> personality-weighted LLM/fallback pick.
- * No state mutation happens here, which is exactly what makes it safe to
- * run for many agents concurrently (see DayProcessor.ts) — the LLM round
- * trip, not local computation, is what dominates a cycle's wall-clock time,
- * so fanning these out is the actual throughput win.
+ * deterministic candidate list -> pick one under the simulation's decision
+ * policy (LLM/PERSONALITY/RANDOM/RATIONAL — prd.md §22). No state mutation
+ * happens here, which is exactly what makes it safe to run for many agents
+ * concurrently (see DayProcessor.ts) — the LLM round trip, not local
+ * computation, is what dominates a cycle's wall-clock time, so fanning
+ * these out is the actual throughput win.
  */
 export async function prepareAgentDecision(
   ctx: EconomyContext,
@@ -98,9 +99,10 @@ export async function prepareAgentDecision(
   gameDay: number,
   seed: number,
   marketSummary: string,
+  policy: DecisionPolicy = "LLM",
 ): Promise<PreparedDecision> {
   const candidates = await generateCandidateActions(ctx, agent, simulationId, gameDay);
-  const { selected, source, model } = await decideAction(agent, candidates, marketSummary, seed, gameDay);
+  const { selected, source, model } = await decideAction(agent, candidates, marketSummary, seed, gameDay, policy);
   return { agentId: agent.id, candidates, selected, source, model };
 }
 
@@ -149,7 +151,15 @@ export async function applyAgentDecision(ctx: EconomyContext, prepared: Prepared
 }
 
 /** Convenience wrapper for callers that just want one full cycle for one agent, sequentially. */
-export async function runAgentDecision(ctx: EconomyContext, agent: Agent, simulationId: string, gameDay: number, seed: number, marketSummary: string): Promise<void> {
-  const prepared = await prepareAgentDecision(ctx, agent, simulationId, gameDay, seed, marketSummary);
+export async function runAgentDecision(
+  ctx: EconomyContext,
+  agent: Agent,
+  simulationId: string,
+  gameDay: number,
+  seed: number,
+  marketSummary: string,
+  policy: DecisionPolicy = "LLM",
+): Promise<void> {
+  const prepared = await prepareAgentDecision(ctx, agent, simulationId, gameDay, seed, marketSummary, policy);
   await applyAgentDecision(ctx, prepared, simulationId, gameDay);
 }

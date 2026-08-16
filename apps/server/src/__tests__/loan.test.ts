@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { STARTING_REPUTATION } from "@econforge/shared";
+import { STARTING_REPUTATION, DEFAULT_RULES } from "@econforge/shared";
 import type { Agent } from "@econforge/shared";
 import { createInMemoryRepositories } from "../persistence/memory/index.js";
 import { InMemoryLedgerService } from "../blockchain/InMemoryLedgerService.js";
@@ -35,7 +35,7 @@ describe("loan rules", () => {
   let ctx: EconomyContext;
 
   beforeEach(() => {
-    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService() };
+    ctx = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService(), rules: DEFAULT_RULES };
   });
 
   it("rejects a loan above 50% of net worth", async () => {
@@ -60,6 +60,16 @@ describe("loan rules", () => {
 
     await expect(takeLoan(ctx, agent, 50, SIMULATION_ID, 12)).rejects.toThrow(ActionError); // overdue by 1 day
     expect(loan.dueDay).toBe(11);
+  });
+
+  it("honors a per-simulation rules override instead of the global default (prd.md §22 loan-policy experiments)", async () => {
+    const looseCtx: EconomyContext = { ...ctx, rules: { ...DEFAULT_RULES, loanMaxPercentBps: 8000, loanInterestBps: 500, loanDurationDays: 20 } };
+    await seedTreasury(looseCtx, 10000);
+    const agent = await makeAgent(looseCtx); // net worth 1000, 80% cap = 800 (would be rejected at the 50% default)
+
+    const loan = await takeLoan(looseCtx, agent, 800, SIMULATION_ID, 1);
+    expect(loan.interestAmount).toBe(40); // 5% of 800, not the default 10%
+    expect(loan.dueDay).toBe(21); // issued day 1 + 20-day override, not the default 10
   });
 
   it("rewards on-time repayment and penalizes late repayment", async () => {

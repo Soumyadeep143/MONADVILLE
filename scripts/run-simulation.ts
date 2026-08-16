@@ -6,7 +6,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { Personality } from "@econforge/shared";
-import { STARTING_CASH } from "@econforge/shared";
+import { DEFAULT_RULES, STARTING_CASH } from "@econforge/shared";
 import { createInMemoryRepositories } from "../apps/server/src/persistence/memory/index.js";
 import { InMemoryLedgerService } from "../apps/server/src/blockchain/InMemoryLedgerService.js";
 import type { EconomyContext } from "../apps/server/src/economy/context.js";
@@ -22,7 +22,7 @@ function randomPersonality(): Personality {
 }
 
 async function main() {
-  const ctx: EconomyContext = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService() };
+  const ctx: EconomyContext = { repos: createInMemoryRepositories(), ledger: new InMemoryLedgerService(), rules: DEFAULT_RULES };
 
   const participants = Array.from({ length: AGENT_COUNT }, () => ({ userId: randomUUID(), personality: randomPersonality() }));
   const simulation0 = await SimulationEngine.createSimulation(ctx, { name: "Headless smoke test", durationDays: DURATION_DAYS, participants });

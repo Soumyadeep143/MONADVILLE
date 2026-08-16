@@ -7,6 +7,7 @@ interface SimulationSummary {
   status: string;
   currentDay: number;
   durationDays: number;
+  decisionPolicy?: string;
 }
 
 export default function Lobby({ onOpenSimulation }: { onOpenSimulation: (id: string) => void }) {
@@ -14,6 +15,7 @@ export default function Lobby({ onOpenSimulation }: { onOpenSimulation: (id: str
   const [name, setName] = useState("Baseline Experiment");
   const [extraAgents, setExtraAgents] = useState(19);
   const [durationDays, setDurationDays] = useState(30);
+  const [decisionPolicy, setDecisionPolicy] = useState("LLM");
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
@@ -31,7 +33,7 @@ export default function Lobby({ onOpenSimulation }: { onOpenSimulation: (id: str
     try {
       const userId = getSessionUserId()!;
       const extraIds = Array.from({ length: Math.max(0, extraAgents) }, () => crypto.randomUUID());
-      const res = await api.createSimulation(name, [userId, ...extraIds], durationDays);
+      const res = await api.createSimulation(name, [userId, ...extraIds], durationDays, decisionPolicy);
       await api.startSimulation(res.simulationId);
       await refresh();
       onOpenSimulation(res.simulationId);
@@ -57,6 +59,15 @@ export default function Lobby({ onOpenSimulation }: { onOpenSimulation: (id: str
           <label>
             Days <input type="number" min={1} max={365} value={durationDays} onChange={(e) => setDurationDays(Number(e.target.value))} style={{ width: 60 }} />
           </label>
+          <label>
+            Decision policy{" "}
+            <select value={decisionPolicy} onChange={(e) => setDecisionPolicy(e.target.value)}>
+              <option value="LLM">LLM (Groq, falls back to personality)</option>
+              <option value="PERSONALITY">Personality-driven (deterministic)</option>
+              <option value="RANDOM">Random baseline</option>
+              <option value="RATIONAL">Rational baseline</option>
+            </select>
+          </label>
           <button onClick={create} disabled={busy}>
             {busy ? "Creating..." : "Create & start"}
           </button>
@@ -75,7 +86,7 @@ export default function Lobby({ onOpenSimulation }: { onOpenSimulation: (id: str
                 <strong>{sim.name}</strong>{" "}
                 <span className={`badge ${sim.status.toLowerCase()}`}>{sim.status}</span>
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>
-                  Day {sim.currentDay}/{sim.durationDays}
+                  Day {sim.currentDay}/{sim.durationDays} &middot; {sim.decisionPolicy ?? "LLM"}
                 </div>
               </div>
               <button onClick={() => onOpenSimulation(sim.id)}>Open</button>
